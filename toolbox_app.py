@@ -18,31 +18,31 @@ APP_NAME = "JY 临时需求工具箱"
 CONFIG_DIR = Path.home() / ".jy_toolbox"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-COLOR_BG = "#1f1f1f"
-COLOR_SURFACE = "#292929"
-COLOR_SURFACE_RAISED = "#303030"
-COLOR_FIELD = "#232323"
+COLOR_BG = "#eef1f4"
+COLOR_SURFACE = "#f8f9fa"
+COLOR_SURFACE_RAISED = "#f3f4f6"
+COLOR_FIELD = "#fbfcfd"
 COLOR_PRIMARY = "#2da44e"
-COLOR_PRIMARY_DARK = "#238636"
-COLOR_PRIMARY_HOVER = "#35b85a"
-COLOR_PRIMARY_PRESSED = "#238636"
-COLOR_TEXT = "#f1f3f5"
-COLOR_MUTED = "#b7bdc5"
-COLOR_DISABLED = "#6f7782"
-COLOR_BORDER = "#464646"
-COLOR_BORDER_LIGHT = "#555555"
-COLOR_ACCENT = "#25352c"
-COLOR_ACCENT_TEXT = "#7ee787"
-COLOR_BUTTON = "#353535"
-COLOR_BUTTON_HOVER = "#424242"
-COLOR_BUTTON_PRESSED = "#2f2f2f"
-COLOR_DANGER = "#da3633"
+COLOR_PRIMARY_DARK = "#1f7a3d"
+COLOR_PRIMARY_HOVER = "#279247"
+COLOR_PRIMARY_PRESSED = "#1f7a3d"
+COLOR_TEXT = "#24292f"
+COLOR_MUTED = "#57606a"
+COLOR_DISABLED = "#8c959f"
+COLOR_BORDER = "#d0d7de"
+COLOR_BORDER_LIGHT = "#8c959f"
+COLOR_ACCENT = "#eaf7ef"
+COLOR_ACCENT_TEXT = "#1a7f37"
+COLOR_BUTTON = "#f8f9fa"
+COLOR_BUTTON_HOVER = "#eef1f4"
+COLOR_BUTTON_PRESSED = "#e2e7ec"
+COLOR_DANGER = "#cf222e"
 COLOR_DANGER_DARK = "#a40e26"
-COLOR_DANGER_HOVER = "#f85149"
-COLOR_DANGER_PRESSED = "#b62324"
-COLOR_WARNING = "#9e6a03"
-COLOR_WARNING_DARK = "#7c5200"
-COLOR_WARNING_PRESSED = "#5f3f00"
+COLOR_DANGER_HOVER = "#a40e26"
+COLOR_DANGER_PRESSED = "#82071e"
+COLOR_WARNING = "#bf8700"
+COLOR_WARNING_DARK = "#9a6700"
+COLOR_WARNING_PRESSED = "#7d4e00"
 COLOR_TOOL_SELECTED = COLOR_PRIMARY
 COLOR_TOOL_UNSELECTED = COLOR_BUTTON
 APP_FONT = ("Microsoft YaHei UI", 9)
@@ -51,13 +51,13 @@ APP_FONT_SMALL = ("Microsoft YaHei UI", 8)
 BUTTON_RADIUS = 5
 
 
-def enable_dark_title_bar(root: tk.Tk | tk.Toplevel) -> None:
-    """在 Windows 上强制使用深色标题栏，不跟随系统主题。"""
+def enable_light_title_bar(root: tk.Tk | tk.Toplevel) -> None:
+    """在 Windows 上使用浅色标题栏，配合浅灰色整体主题。"""
     if os.name != "nt":
         return
     root.update_idletasks()
     hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-    value = ctypes.c_int(1)
+    value = ctypes.c_int(0)
     for attribute in (20, 19):
         ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
 
@@ -298,7 +298,7 @@ class PasswordBookDialog(tk.Toplevel):
         self.title("密码本")
         self.geometry("520x420")
         self.configure(bg=COLOR_BG)
-        enable_dark_title_bar(self)
+        enable_light_title_bar(self)
         self.transient(app.root)
         self.grab_set()
         self.check_vars: list[tk.BooleanVar] = []
@@ -375,7 +375,7 @@ class DescriptionEditDialog(tk.Toplevel):
         self.title("编辑工具说明")
         self.geometry("560x320")
         self.configure(bg=COLOR_BG)
-        enable_dark_title_bar(self)
+        enable_light_title_bar(self)
         self.transient(tool_frame.app.root)
         self.grab_set()
 
@@ -663,7 +663,7 @@ class ToolListDialog(tk.Toplevel):
         self.geometry("420x560")
         self.minsize(360, 420)
         self.configure(bg=COLOR_BG)
-        enable_dark_title_bar(self)
+        enable_light_title_bar(self)
         self.transient(app.root)
         self.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -704,7 +704,7 @@ class ToolboxApp:
         self.root = tk.Tk()
         self.root.title(APP_NAME)
         self.root.geometry("1080x720")
-        enable_dark_title_bar(self.root)
+        enable_light_title_bar(self.root)
         self.config = ConfigStore()
         self.tools: dict[str, ToolDefinition] = {}
         self.current_tool_frame: BaseToolFrame | None = None
@@ -834,7 +834,7 @@ class ToolboxApp:
         )
         style.map(
             "TEntry",
-            fieldbackground=[("focus", "#262626"), ("disabled", COLOR_SURFACE)],
+            fieldbackground=[("focus", COLOR_SURFACE_RAISED), ("disabled", COLOR_BG)],
             foreground=[("disabled", COLOR_DISABLED)],
             bordercolor=[("focus", COLOR_BORDER_LIGHT)],
         )
@@ -851,7 +851,7 @@ class ToolboxApp:
         )
         style.map(
             "TCombobox",
-            fieldbackground=[("readonly", COLOR_FIELD), ("focus", "#262626"), ("disabled", COLOR_SURFACE)],
+            fieldbackground=[("readonly", COLOR_FIELD), ("focus", COLOR_SURFACE_RAISED), ("disabled", COLOR_BG)],
             foreground=[("readonly", COLOR_TEXT), ("disabled", COLOR_DISABLED)],
             background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)],
             bordercolor=[("focus", COLOR_BORDER_LIGHT)],
