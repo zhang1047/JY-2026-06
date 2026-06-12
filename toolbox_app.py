@@ -437,7 +437,7 @@ class BaseToolFrame(ttk.Frame):
         self.description_var = tk.StringVar(value=description)
 
         desc_row = ttk.Frame(self, style="Surface.TFrame")
-        desc_row.pack(fill="x", padx=22, pady=(18, 6))
+        desc_row.pack(fill="x", padx=22, pady=(8, 6))
         ttk.Label(desc_row, text="说明：", style="Muted.TLabel").pack(side="left", anchor="n", pady=(3, 0))
         ttk.Label(
             desc_row,
@@ -889,17 +889,11 @@ class ToolboxApp:
         style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=APP_FONT_BOLD)
 
     def _build_layout(self) -> None:
-        top = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 18))
+        top = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 12))
         top.pack(fill="x")
         title_group = ttk.Frame(top, style="Surface.TFrame")
         title_group.pack(side="left", fill="x", expand=True)
         ttk.Label(title_group, text=APP_NAME, style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            title_group,
-            text="轻量、清爽的临时需求处理工作台",
-            style="HeroSubtitle.TLabel",
-        ).pack(anchor="w", pady=(4, 0))
-
         actions = ttk.Frame(top, style="Surface.TFrame")
         actions.pack(side="right")
         make_rounded_button(actions, "工具列表", self.open_tool_list, role="primary", width=82).pack(side="left", padx=(0, 10))
