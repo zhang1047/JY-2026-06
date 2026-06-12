@@ -733,7 +733,7 @@ class PostTypeRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
     LEGACY_OUTPUT_COLUMN = "帖子类型"
-    OUTPUT_COLUMNS = ("文字帖占比", "图片帖占比", "视频帖占比")
+    OUTPUT_COLUMNS = ("文字帖占比", "图片帖占比", "视频帖占比", "未识别")
     REQUIRED_POST_COLUMNS = ["主页url", "图片附件", "创作类型", "标题", "帖子正文"]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
@@ -850,7 +850,7 @@ class PostTypeRatioTool(BaseToolFrame):
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
                 "完成：账号 {accounts} 行，贴文 {posts} 行，已匹配 {matched_accounts} 个账号，"
-                "有可判断类型的账号 {typed_accounts} 个。输出：{output}".format(
+                "有贴文占比的账号 {typed_accounts} 个。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
                     matched_accounts=result["matched_accounts"],
@@ -892,10 +892,16 @@ def _format_post_type_ratios(counts: dict[str, int]) -> dict[str, str]:
     total = sum(counts.values())
     if total <= 0:
         return {column: "" for column in PostTypeRatioTool.OUTPUT_COLUMNS}
+
+    text_ratio = round(counts.get("文字", 0) / total * 100, 2)
+    image_ratio = round(counts.get("图片", 0) / total * 100, 2)
+    video_ratio = round(counts.get("视频", 0) / total * 100, 2)
+    unidentified_ratio = round(100 - text_ratio - image_ratio - video_ratio, 2)
     return {
-        "文字帖占比": f"{counts.get('文字', 0) / total * 100:.2f}%",
-        "图片帖占比": f"{counts.get('图片', 0) / total * 100:.2f}%",
-        "视频帖占比": f"{counts.get('视频', 0) / total * 100:.2f}%",
+        "文字帖占比": f"{text_ratio:.2f}%",
+        "图片帖占比": f"{image_ratio:.2f}%",
+        "视频帖占比": f"{video_ratio:.2f}%",
+        "未识别": f"{unidentified_ratio:.2f}%",
     }
 
 
@@ -932,18 +938,18 @@ def calculate_post_type_ratios_excel(
         progress(50, "正在识别每条贴文的文字、图片、视频类型……")
     work = post_df.copy()
     work["__post_type__"] = work.apply(classify_post_type, axis=1)
-    typed_work = work[work["__post_type__"].isin(["文字", "图片", "视频"])].copy()
+    work["__post_type__"] = work["__post_type__"].replace("", "未识别")
 
     empty_ratios = {column: "" for column in PostTypeRatioTool.OUTPUT_COLUMNS}
     ratios_by_homepage: dict[str, dict[str, str]] = {}
-    if not typed_work.empty:
-        grouped = typed_work.groupby(PostTypeRatioTool.POST_URL_COLUMN)["__post_type__"].value_counts()
+    if not work.empty:
+        grouped = work.groupby(PostTypeRatioTool.POST_URL_COLUMN)["__post_type__"].value_counts()
         for homepage, counts_series in grouped.groupby(level=0):
             counts = {str(type_name): int(count) for (_, type_name), count in counts_series.items()}
             ratios_by_homepage[_normalized_key(homepage)] = _format_post_type_ratios(counts)
 
     if progress is not None:
-        progress(75, "正在写回账号表最后三列类型占比……")
+        progress(75, "正在写回账号表最后四列类型占比……")
     output_df = account_df.copy()
     drop_columns = [
         column
@@ -1063,7 +1069,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "按规则统计每个账号文字、图片、视频贴文占比，并在账号表最后新增三列占比。"
+                    "按规则统计每个账号文字、图片、视频、未识别贴文占比，并在账号表最后新增四列占比。"
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
