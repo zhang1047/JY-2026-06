@@ -877,6 +877,147 @@ class PostTypeRatioTool(BaseToolFrame):
         self.run_in_background(task, on_success, start_message="已开始后台统计贴文类型占比……")
 
 
+class AveragePostLengthTool(BaseToolFrame):
+    ACCOUNT_URL_COLUMN = "FB主页"
+    POST_URL_COLUMN = "主页url"
+    BODY_COLUMN = "帖子正文"
+    OUTPUT_COLUMN = "平均发帖长度"
+    REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, BODY_COLUMN]
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, app, state, description)
+        self.account_input_var = tk.StringVar(value=state.get("account_input_path", ""))
+        self.post_input_var = tk.StringVar(value=state.get("post_input_path", ""))
+        self.output_var = tk.StringVar(value=state.get("output_path", ""))
+        self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
+        self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self._build_form()
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text="平均发帖长度", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
+        ttk.Label(form, text="账号表工作表：").grid(row=3, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=3, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(form, text="留空则读取第一个工作表").grid(row=3, column=2, sticky="w", padx=10, pady=8)
+        ttk.Label(form, text="贴文表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
+        form.columnconfigure(1, weight=1)
+
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
+
+    def _path_row(
+        self,
+        parent: ttk.LabelFrame,
+        row: int,
+        label: str,
+        var: tk.StringVar,
+        command: Callable[[], None],
+    ) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择账号 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        self.account_input_var.set(path)
+        if not self.output_var.get().strip():
+            p = Path(path)
+            self.output_var.set(str(p.with_name(f"{p.stem}_平均发帖长度.xlsx")))
+        self.save_state()
+
+    def choose_post_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择贴文 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if path:
+            self.post_input_var.set(path)
+            self.save_state()
+
+    def choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="保存账号表处理结果",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+        )
+        if path:
+            self.output_var.set(path)
+            self.save_state()
+
+    def save_state(self) -> None:
+        self.app.config.set_tool_state(
+            "average_post_length",
+            {
+                "account_input_path": self.account_input_var.get().strip(),
+                "post_input_path": self.post_input_var.get().strip(),
+                "output_path": self.output_var.get().strip(),
+                "account_sheet_name": self.account_sheet_var.get().strip(),
+                "post_sheet_name": self.post_sheet_var.get().strip(),
+            },
+        )
+        self.status_var.set("当前工具填写内容已保存。")
+
+    def run(self) -> None:
+        account_input_path = self.account_input_var.get().strip()
+        post_input_path = self.post_input_var.get().strip()
+        output_path = self.output_var.get().strip()
+        account_sheet_name = self.account_sheet_var.get().strip() or 0
+        post_sheet_name = self.post_sheet_var.get().strip() or 0
+        if not account_input_path:
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
+            return
+        if not post_input_path:
+            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            return
+        if not output_path:
+            messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
+            return
+        self.save_state()
+
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            return calculate_average_post_length_excel(
+                Path(account_input_path),
+                Path(post_input_path),
+                Path(output_path),
+                self.app.config.data.get("passwords", []),
+                account_sheet_name,
+                post_sheet_name,
+                progress,
+            )
+
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set(
+                "完成：账号 {accounts} 行，贴文 {posts} 行，已匹配 {matched_accounts} 个账号，"
+                "已写入 {averaged_accounts} 个账号。输出：{output}".format(
+                    accounts=result["accounts"],
+                    posts=result["posts"],
+                    matched_accounts=result["matched_accounts"],
+                    averaged_accounts=result["averaged_accounts"],
+                    output=output_path,
+                )
+            )
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        self.run_in_background(task, on_success, start_message="已开始后台统计平均发帖长度……")
+
+
 class AddedOpinionShareRateTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
@@ -1308,6 +1449,75 @@ def calculate_post_type_ratios_excel(
     }
 
 
+def _post_body_text_length(value: Any) -> int:
+    if not _is_non_empty_cell(value):
+        return 0
+    return len(str(value).strip())
+
+
+def calculate_average_post_length_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if AveragePostLengthTool.ACCOUNT_URL_COLUMN not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{AveragePostLengthTool.ACCOUNT_URL_COLUMN}")
+    missing_posts = [col for col in AveragePostLengthTool.REQUIRED_POST_COLUMNS if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在计算每条贴文正文长度……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work[AveragePostLengthTool.POST_URL_COLUMN].map(_normalized_key)
+    work = work[work["__homepage_key__"] != ""].copy()
+    work["__body_length__"] = work[AveragePostLengthTool.BODY_COLUMN].map(_post_body_text_length)
+
+    if progress is not None:
+        progress(72, "正在按账号汇总平均发帖长度……")
+    average_by_homepage: dict[str, float] = {}
+    for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
+        average_by_homepage[str(homepage)] = round(float(homepage_rows["__body_length__"].mean()), 2)
+
+    if progress is not None:
+        progress(84, "正在写回账号表平均发帖长度列……")
+    output_df = account_df.copy()
+    if AveragePostLengthTool.OUTPUT_COLUMN in output_df.columns:
+        output_df = output_df.drop(columns=[AveragePostLengthTool.OUTPUT_COLUMN])
+    account_keys = output_df[AveragePostLengthTool.ACCOUNT_URL_COLUMN].map(_normalized_key)
+    output_df[AveragePostLengthTool.OUTPUT_COLUMN] = account_keys.map(lambda key: average_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(work["__homepage_key__"])).sum())
+    averaged_accounts = int(output_df[AveragePostLengthTool.OUTPUT_COLUMN].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "matched_accounts": matched_accounts,
+        "averaged_accounts": averaged_accounts,
+    }
+
+
 def _format_category_ratios(counts: dict[str, int]) -> str:
     total = sum(counts.values())
     if total <= 0:
@@ -1616,6 +1826,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="average_post_length",
+                name="平均发帖长度",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "只统计贴文表“帖子正文”列的文字长度，按账号计算平均每个帖子的正文长度，"
+                    "并在账号表最后新增“平均发帖长度”列。"
+                ),
+                factory=lambda parent, app, state: AveragePostLengthTool(
+                    parent, app, state, app.get_tool_description("average_post_length")
                 ),
             )
         )
