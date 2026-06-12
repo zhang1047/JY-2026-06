@@ -17,18 +17,31 @@ APP_NAME = "JY 临时需求工具箱"
 CONFIG_DIR = Path.home() / ".jy_toolbox"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-COLOR_BG = "#f6f7f8"
+COLOR_BG = "#f6f8fa"
 COLOR_SURFACE = "#ffffff"
-COLOR_PRIMARY = "#18a558"
-COLOR_PRIMARY_DARK = "#159149"
-COLOR_TEXT = "#1f2933"
-COLOR_MUTED = "#666666"
-COLOR_BORDER = "#d9d9d9"
-COLOR_ACCENT = "#edf8f2"
-COLOR_DANGER = "#d93025"
-COLOR_DANGER_DARK = "#b3261e"
-COLOR_TOOL_SELECTED = "#2d2d2d"
-COLOR_TOOL_UNSELECTED = "#f4f4f4"
+COLOR_PRIMARY = "#2da44e"
+COLOR_PRIMARY_DARK = "#2a9145"
+COLOR_PRIMARY_HOVER = "#2c974b"
+COLOR_PRIMARY_PRESSED = "#298e46"
+COLOR_TEXT = "#24292f"
+COLOR_MUTED = "#57606a"
+COLOR_DISABLED = "#8c959f"
+COLOR_BORDER = "#d0d7de"
+COLOR_BORDER_LIGHT = "#d8dee4"
+COLOR_ACCENT = "#ddf4ff"
+COLOR_BUTTON = "#f6f8fa"
+COLOR_BUTTON_HOVER = "#eef1f4"
+COLOR_BUTTON_PRESSED = "#eaeef2"
+COLOR_DANGER = "#d73a49"
+COLOR_DANGER_DARK = "#b62332"
+COLOR_DANGER_HOVER = "#cb2431"
+COLOR_DANGER_PRESSED = "#a40e26"
+COLOR_WARNING = "#bf8700"
+COLOR_WARNING_DARK = "#9a6700"
+COLOR_WARNING_PRESSED = "#7d4e00"
+COLOR_TOOL_SELECTED = COLOR_PRIMARY
+COLOR_TOOL_UNSELECTED = COLOR_BUTTON
+BUTTON_RADIUS = 6
 
 
 def mask_password(password: str) -> str:
@@ -49,6 +62,177 @@ class ToolDefinition:
     default_category: str
     description: str
     factory: Callable[[tk.Widget, "ToolboxApp", dict[str, Any]], "BaseToolFrame"]
+
+
+BUTTON_PALETTES = {
+    "normal": {
+        "bg": COLOR_BUTTON,
+        "hover": COLOR_BUTTON_HOVER,
+        "pressed": COLOR_BUTTON_PRESSED,
+        "fg": COLOR_TEXT,
+        "border": COLOR_BORDER,
+    },
+    "primary": {
+        "bg": COLOR_PRIMARY,
+        "hover": COLOR_PRIMARY_HOVER,
+        "pressed": COLOR_PRIMARY_PRESSED,
+        "fg": "#ffffff",
+        "border": COLOR_PRIMARY_DARK,
+    },
+    "danger": {
+        "bg": COLOR_DANGER,
+        "hover": COLOR_DANGER_HOVER,
+        "pressed": COLOR_DANGER_PRESSED,
+        "fg": "#ffffff",
+        "border": COLOR_DANGER_DARK,
+    },
+    "warning": {
+        "bg": COLOR_WARNING,
+        "hover": COLOR_WARNING_DARK,
+        "pressed": COLOR_WARNING_PRESSED,
+        "fg": "#ffffff",
+        "border": COLOR_WARNING_DARK,
+    },
+    "selected": {
+        "bg": COLOR_PRIMARY,
+        "hover": COLOR_PRIMARY_HOVER,
+        "pressed": COLOR_PRIMARY_PRESSED,
+        "fg": "#ffffff",
+        "border": COLOR_PRIMARY_DARK,
+    },
+}
+
+
+class RoundedButton(tk.Canvas):
+    """Canvas 绘制的圆角按钮，避开 ttk 在部分系统上直角且过大的默认外观。"""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None] | None = None,
+        *,
+        role: str = "normal",
+        width: int | None = None,
+        height: int = 32,
+        padx: int = 12,
+        font: tuple[str, int, str] | tuple[str, int] = ("Microsoft YaHei UI", 10),
+    ) -> None:
+        self.text = text
+        self.command = command
+        self.role = role if role in BUTTON_PALETTES else "normal"
+        self.padx = padx
+        self.fixed_width = width
+        self._state = "bg"
+        self._pressed = False
+        palette = BUTTON_PALETTES[self.role]
+        super().__init__(
+            parent,
+            width=width or max(64, len(text) * 14 + padx * 2),
+            height=height,
+            bg=self._parent_bg(parent),
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+        )
+        self.configure(takefocus=True)
+        self._font = font
+        self._items: tuple[int, int] | None = None
+        self._palette = palette
+        self.bind("<Configure>", lambda _e: self._draw())
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self.bind("<space>", self._on_key)
+        self.bind("<Return>", self._on_key)
+        self._draw()
+
+    @staticmethod
+    def _parent_bg(parent: tk.Widget) -> str:
+        try:
+            return str(parent.cget("background"))
+        except tk.TclError:
+            pass
+        try:
+            style_name = str(parent.cget("style")) or parent.winfo_class()
+            styled_bg = ttk.Style(parent).lookup(style_name, "background")
+            return str(styled_bg or COLOR_BG)
+        except tk.TclError:
+            return COLOR_BG
+
+    def _rounded_rect(self, x1: int, y1: int, x2: int, y2: int, radius: int, **kwargs: Any) -> int:
+        points = [
+            x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
+            x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
+            x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1,
+        ]
+        return self.create_polygon(points, smooth=True, splinesteps=12, **kwargs)
+
+    def _draw(self) -> None:
+        self.delete("all")
+        width = max(1, self.winfo_width() or int(self.cget("width")))
+        height = max(1, self.winfo_height() or int(self.cget("height")))
+        fill = self._palette[self._state]
+        border = self._palette["border"]
+        self._rounded_rect(1, 1, width - 1, height - 1, BUTTON_RADIUS, fill=fill, outline=border, width=1)
+        self.create_text(
+            width // 2,
+            height // 2,
+            text=self.text,
+            fill=self._palette["fg"],
+            font=self._font,
+        )
+
+    def _on_enter(self, _event: tk.Event) -> None:
+        if not self._pressed:
+            self._state = "hover"
+            self._draw()
+
+    def _on_leave(self, _event: tk.Event) -> None:
+        self._pressed = False
+        self._state = "bg"
+        self._draw()
+
+    def _on_press(self, _event: tk.Event) -> None:
+        self.focus_set()
+        self._pressed = True
+        self._state = "pressed"
+        self._draw()
+
+    def _on_release(self, event: tk.Event) -> None:
+        was_pressed = self._pressed
+        self._pressed = False
+        inside = 0 <= event.x <= self.winfo_width() and 0 <= event.y <= self.winfo_height()
+        self._state = "hover" if inside else "bg"
+        self._draw()
+        if was_pressed and inside and self.command is not None:
+            self.command()
+
+    def _on_key(self, _event: tk.Event) -> str:
+        if self.command is not None:
+            self.command()
+        return "break"
+
+
+def make_rounded_button(
+    parent: tk.Widget,
+    text: str,
+    command: Callable[[], None] | None = None,
+    *,
+    role: str = "normal",
+    width: int | None = None,
+    height: int = 32,
+) -> RoundedButton:
+    return RoundedButton(parent, text, command, role=role, width=width, height=height)
+
+
+def rounded_rect_points(x1: int, y1: int, x2: int, y2: int, radius: int = BUTTON_RADIUS) -> list[int]:
+    return [
+        x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
+        x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
+        x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1,
+    ]
 
 
 class ConfigStore:
@@ -119,9 +303,9 @@ class PasswordBookDialog(tk.Toplevel):
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", padx=14, pady=(8, 14))
-        ttk.Button(buttons, text="新增密码", command=self.add_password, style="Green.TButton").pack(side="left")
-        ttk.Button(buttons, text="删除勾选", command=self.delete_checked, style="Danger.TButton").pack(side="left", padx=8)
-        ttk.Button(buttons, text="关闭", command=self.destroy, style="Small.TButton").pack(side="right")
+        make_rounded_button(buttons, "新增密码", self.add_password, role="primary", width=92).pack(side="left")
+        make_rounded_button(buttons, "删除勾选", self.delete_checked, role="danger", width=92).pack(side="left", padx=8)
+        make_rounded_button(buttons, "关闭", self.destroy, width=72).pack(side="right")
         self.refresh()
 
     def refresh(self) -> None:
@@ -206,9 +390,9 @@ class DescriptionEditDialog(tk.Toplevel):
 
         buttons = ttk.Frame(shell, style="Surface.TFrame")
         buttons.pack(fill="x", pady=(12, 0))
-        ttk.Button(buttons, text="恢复默认", command=self.restore_default, style="Small.TButton").pack(side="left")
-        ttk.Button(buttons, text="取消", command=self.destroy, style="Small.TButton").pack(side="right")
-        ttk.Button(buttons, text="保存", command=self.save, style="Green.TButton").pack(side="right", padx=(0, 8))
+        make_rounded_button(buttons, "恢复默认", self.restore_default, width=84).pack(side="left")
+        make_rounded_button(buttons, "取消", self.destroy, width=72).pack(side="right")
+        make_rounded_button(buttons, "保存", self.save, role="primary", width=72).pack(side="right", padx=(0, 8))
         self.bind("<Control-s>", lambda _e: self.save())
 
     def restore_default(self) -> None:
@@ -242,7 +426,7 @@ class BaseToolFrame(ttk.Frame):
             wraplength=780,
             justify="left",
         ).pack(side="left", fill="x", expand=True, padx=(2, 10))
-        ttk.Button(desc_row, text="编辑", command=self.open_description_editor, style="Small.TButton").pack(side="right")
+        make_rounded_button(desc_row, "编辑", self.open_description_editor, width=58, height=30).pack(side="right")
 
     def _description_value(self) -> str:
         return self.description_var.get().strip()
@@ -311,8 +495,8 @@ class PostDedupTool(BaseToolFrame):
 
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
-        ttk.Button(actions, text="开始去重", command=self.run, style="Primary.TButton").pack(side="left")
-        ttk.Button(actions, text="保存当前填写", command=self.save_state, style="Small.TButton").pack(side="left", padx=10)
+        make_rounded_button(actions, "开始去重", self.run, role="primary", width=92).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=112).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(14, 12))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
@@ -320,7 +504,7 @@ class PostDedupTool(BaseToolFrame):
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Button(parent, text="浏览", command=command).grid(row=row, column=2, padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=64).grid(row=row, column=2, padx=10, pady=8)
 
     def choose_input(self) -> None:
         path = filedialog.askopenfilename(
@@ -471,7 +655,7 @@ class ToolListDialog(tk.Toplevel):
         title_group.pack(side="left", fill="x", expand=True)
         ttk.Label(title_group, text="工具列表", style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(title_group, text="按分类管理工具，拖动工具可移动分类", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
-        ttk.Button(header, text="＋ 新增分类", command=app.add_category, style="Green.TButton").pack(side="right")
+        make_rounded_button(header, "＋ 新增分类", app.add_category, role="primary", width=108).pack(side="right")
 
         list_card = ttk.Frame(shell, style="Card.TFrame", padding=(12, 12))
         list_card.pack(fill="both", expand=True)
@@ -487,7 +671,7 @@ class ToolListDialog(tk.Toplevel):
 
         footer = ttk.Frame(shell, style="Surface.TFrame")
         footer.pack(fill="x", pady=(14, 0))
-        ttk.Button(footer, text="关闭", command=self.close, style="Small.TButton").pack(side="right")
+        make_rounded_button(footer, "关闭", self.close, width=72).pack(side="right")
 
     def close(self) -> None:
         self.app.tool_list_dialog = None
@@ -576,27 +760,28 @@ class ToolboxApp:
         style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_PRIMARY_DARK, font=("Microsoft YaHei UI", 10))
         style.configure(
             "TButton",
-            font=("Microsoft YaHei UI", 10, "bold"),
-            padding=(12, 7),
+            font=("Microsoft YaHei UI", 10),
+            padding=(12, 5),
             borderwidth=1,
             relief="flat",
-            background=COLOR_TOOL_UNSELECTED,
-            foreground=COLOR_MUTED,
+            background=COLOR_BUTTON,
+            foreground=COLOR_TEXT,
+            bordercolor=COLOR_BORDER,
         )
-        style.map("TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
+        style.map("TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", bordercolor=COLOR_PRIMARY_DARK)
-        style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
+        style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
         style.configure("Green.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(12, 5), bordercolor=COLOR_PRIMARY_DARK)
-        style.map("Green.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
-        style.configure("Small.TButton", background=COLOR_TOOL_UNSELECTED, foreground=COLOR_MUTED, padding=(10, 5), bordercolor=COLOR_BORDER)
-        style.map("Small.TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
+        style.map("Green.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
+        style.configure("Small.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(10, 5), bordercolor=COLOR_BORDER)
+        style.map("Small.TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
         style.configure("Danger.TButton", background=COLOR_DANGER, foreground="#ffffff", padding=(10, 5), bordercolor=COLOR_DANGER_DARK)
-        style.map("Danger.TButton", background=[("active", COLOR_DANGER_DARK), ("pressed", COLOR_DANGER_DARK)])
-        style.configure("Tool.TButton", background=COLOR_TOOL_UNSELECTED, foreground=COLOR_MUTED, padding=(18, 8), bordercolor=COLOR_BORDER)
-        style.map("Tool.TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
-        style.configure("SelectedTool.TButton", background=COLOR_TOOL_SELECTED, foreground="#ffffff", padding=(18, 8), bordercolor="#4a4a4a")
-        style.map("SelectedTool.TButton", background=[("active", "#3a3a3a"), ("pressed", "#2d2d2d")])
-        style.configure("TEntry", fieldbackground="#ffffff", padding=(8, 6), bordercolor=COLOR_BORDER)
+        style.map("Danger.TButton", background=[("active", COLOR_DANGER_HOVER), ("pressed", COLOR_DANGER_PRESSED)])
+        style.configure("Tool.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(12, 5), bordercolor=COLOR_BORDER)
+        style.map("Tool.TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
+        style.configure("SelectedTool.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(12, 5), bordercolor=COLOR_PRIMARY_DARK)
+        style.map("SelectedTool.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
+        style.configure("TEntry", fieldbackground="#ffffff", padding=(6, 4), bordercolor=COLOR_BORDER, lightcolor=COLOR_BORDER)
         style.configure("TLabelframe", background=COLOR_BG, bordercolor=COLOR_BORDER, relief="solid")
         style.configure("Card.TLabelframe", background=COLOR_SURFACE, bordercolor=COLOR_BORDER, relief="solid")
         style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 11, "bold"))
@@ -615,13 +800,8 @@ class ToolboxApp:
 
         actions = ttk.Frame(top, style="Surface.TFrame")
         actions.pack(side="right")
-        ttk.Button(
-            actions,
-            text="工具列表",
-            command=self.open_tool_list,
-            style="Primary.TButton",
-        ).pack(side="left", padx=(0, 10))
-        ttk.Button(actions, text="密码本", command=self.open_password_book, style="Small.TButton").pack(side="left")
+        make_rounded_button(actions, "工具列表", self.open_tool_list, role="primary", width=92).pack(side="left", padx=(0, 10))
+        make_rounded_button(actions, "密码本", self.open_password_book, width=78).pack(side="left")
 
         body = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 0, 24, 24))
         body.pack(fill="both", expand=True)
@@ -652,22 +832,30 @@ class ToolboxApp:
         for category in categories:
             outer = tk.Canvas(container, highlightthickness=0, height=96, bg=COLOR_SURFACE, bd=0)
             outer.pack(fill="x", padx=2, pady=8)
-            inner = ttk.Frame(outer, style="Card.TFrame", padding=(10, 8))
-            window_id = outer.create_window((8, 8), window=inner, anchor="nw")
-            rect_id = outer.create_rectangle(2, 2, 10, 10, dash=(5, 3), outline=COLOR_BORDER, width=2)
+            card_id = outer.create_polygon(
+                rounded_rect_points(2, 2, 10, 10, 8),
+                smooth=True,
+                splinesteps=12,
+                fill=COLOR_SURFACE,
+                outline=COLOR_BORDER,
+                width=1,
+            )
+            inner = ttk.Frame(outer, style="Card.TFrame", padding=(12, 10))
+            window_id = outer.create_window((10, 10), window=inner, anchor="nw")
 
-            def resize(event: tk.Event, canvas: tk.Canvas = outer, win: int = window_id, rect: int = rect_id) -> None:
-                width = max(220, canvas.winfo_width() - 16)
+            def resize(event: tk.Event, canvas: tk.Canvas = outer, win: int = window_id, card: int = card_id) -> None:
+                width = max(220, canvas.winfo_width() - 20)
                 canvas.itemconfigure(win, width=width)
-                needed = event.height + 16
+                needed = event.height + 20
                 canvas.configure(height=needed)
-                canvas.coords(rect, 2, 2, max(4, canvas.winfo_width() - 2), needed - 2)
+                canvas.coords(card, *rounded_rect_points(2, 2, max(4, canvas.winfo_width() - 2), needed - 2, 8))
 
             inner.bind("<Configure>", resize)
             outer.bind(
                 "<Configure>",
-                lambda e, c=outer, r=rect_id: c.coords(
-                    r, 2, 2, max(4, e.width - 2), max(4, int(c.cget("height")) - 2)
+                lambda e, c=outer, card=card_id: c.coords(
+                    card,
+                    *rounded_rect_points(2, 2, max(4, e.width - 2), max(4, int(c.cget("height")) - 2), 8),
                 ),
             )
             self.category_frames[category] = outer
@@ -682,8 +870,8 @@ class ToolboxApp:
                 foreground=COLOR_TEXT,
                 font=("Microsoft YaHei UI", 10, "bold"),
             ).pack(side="left")
-            ttk.Button(header, text="改名", command=lambda c=category: self.rename_category(c), style="Small.TButton").pack(side="right")
-            ttk.Button(header, text="删除", command=lambda c=category: self.delete_category(c), style="Danger.TButton").pack(side="right", padx=6)
+            make_rounded_button(header, "改名", lambda c=category: self.rename_category(c), width=56, height=28).pack(side="right")
+            make_rounded_button(header, "删除", lambda c=category: self.delete_category(c), role="danger", width=56, height=28).pack(side="right", padx=6)
 
             body = ttk.Frame(inner, style="Card.TFrame")
             body.pack(fill="x")
@@ -696,11 +884,17 @@ class ToolboxApp:
             body = self.category_body_frames.get(category)
             if body is None:
                 continue
-            style_name = "SelectedTool.TButton" if key == self.current_tool_key else "Tool.TButton"
-            btn = ttk.Button(body, text=f"  {tool.name}", command=lambda k=key: self.open_tool(k), style=style_name)
+            role = "selected" if key == self.current_tool_key else "normal"
+            btn = make_rounded_button(
+                body,
+                tool.name,
+                lambda k=key: self.open_tool(k),
+                role=role,
+                height=32,
+            )
             btn.pack(fill="x", pady=4)
-            btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k))
-            btn.bind("<ButtonRelease-1>", self.finish_drag)
+            btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k), add="+")
+            btn.bind("<ButtonRelease-1>", self.finish_drag, add="+")
 
     def start_drag(self, tool_key: str) -> None:
         self.drag_data = {"tool_key": tool_key}
