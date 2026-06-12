@@ -732,7 +732,8 @@ def deduplicate_posts_excel(
 class PostTypeRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    OUTPUT_COLUMN = "帖子类型"
+    LEGACY_OUTPUT_COLUMN = "帖子类型"
+    OUTPUT_COLUMNS = ("文字帖占比", "图片帖占比", "视频帖占比")
     REQUIRED_POST_COLUMNS = ["主页url", "图片附件", "创作类型", "标题", "帖子正文"]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
@@ -874,24 +875,28 @@ def _normalized_key(value: Any) -> str:
 
 
 def classify_post_type(row: Any) -> str:
+    homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
+    post_url = "" if not _is_non_empty_cell(row.get("贴文url")) else str(row.get("贴文url"))
+    if "/videos/" in homepage_url.lower() or "/videos/" in post_url.lower():
+        return "视频"
     attachments = "" if not _is_non_empty_cell(row.get("图片附件")) else str(row.get("图片附件"))
     if attachments.count("origin_url_md5") >= 2:
         return "图片"
-    homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
-    post_url = "" if not _is_non_empty_cell(row.get("贴文url")) else str(row.get("贴文url"))
-    if "/videos/" in homepage_url or "/videos/" in post_url:
-        return "视频"
     if str(row.get("创作类型", "")).strip().lower() == "common":
         if _is_non_empty_cell(row.get("标题")) or _is_non_empty_cell(row.get("帖子正文")):
             return "文字"
     return ""
 
 
-def _format_post_type_ratio(counts: dict[str, int]) -> str:
+def _format_post_type_ratios(counts: dict[str, int]) -> dict[str, str]:
     total = sum(counts.values())
     if total <= 0:
-        return ""
-    return "；".join(f"{name}：{counts.get(name, 0) / total * 100:.2f}%" for name in ("文字", "图片", "视频"))
+        return {column: "" for column in PostTypeRatioTool.OUTPUT_COLUMNS}
+    return {
+        "文字帖占比": f"{counts.get('文字', 0) / total * 100:.2f}%",
+        "图片帖占比": f"{counts.get('图片', 0) / total * 100:.2f}%",
+        "视频帖占比": f"{counts.get('视频', 0) / total * 100:.2f}%",
+    }
 
 
 def calculate_post_type_ratios_excel(
@@ -929,20 +934,27 @@ def calculate_post_type_ratios_excel(
     work["__post_type__"] = work.apply(classify_post_type, axis=1)
     typed_work = work[work["__post_type__"].isin(["文字", "图片", "视频"])].copy()
 
-    ratios_by_homepage: dict[str, str] = {}
+    empty_ratios = {column: "" for column in PostTypeRatioTool.OUTPUT_COLUMNS}
+    ratios_by_homepage: dict[str, dict[str, str]] = {}
     if not typed_work.empty:
         grouped = typed_work.groupby(PostTypeRatioTool.POST_URL_COLUMN)["__post_type__"].value_counts()
         for homepage, counts_series in grouped.groupby(level=0):
             counts = {str(type_name): int(count) for (_, type_name), count in counts_series.items()}
-            ratios_by_homepage[_normalized_key(homepage)] = _format_post_type_ratio(counts)
+            ratios_by_homepage[_normalized_key(homepage)] = _format_post_type_ratios(counts)
 
     if progress is not None:
-        progress(75, "正在写回账号表最后一列“帖子类型”……")
+        progress(75, "正在写回账号表最后三列类型占比……")
     output_df = account_df.copy()
-    if PostTypeRatioTool.OUTPUT_COLUMN in output_df.columns:
-        output_df = output_df.drop(columns=[PostTypeRatioTool.OUTPUT_COLUMN])
+    drop_columns = [
+        column
+        for column in (PostTypeRatioTool.LEGACY_OUTPUT_COLUMN, *PostTypeRatioTool.OUTPUT_COLUMNS)
+        if column in output_df.columns
+    ]
+    if drop_columns:
+        output_df = output_df.drop(columns=drop_columns)
     account_keys = output_df[PostTypeRatioTool.ACCOUNT_URL_COLUMN].map(_normalized_key)
-    output_df[PostTypeRatioTool.OUTPUT_COLUMN] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+    for column in PostTypeRatioTool.OUTPUT_COLUMNS:
+        output_df[column] = account_keys.map(lambda key, column=column: ratios_by_homepage.get(key, empty_ratios).get(column, ""))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if progress is not None:
@@ -950,7 +962,7 @@ def calculate_post_type_ratios_excel(
     output_df.to_excel(output_path, index=False)
 
     matched_accounts = int(account_keys.isin(set(_normalized_key(v) for v in post_df[PostTypeRatioTool.POST_URL_COLUMN])).sum())
-    typed_accounts = int(output_df[PostTypeRatioTool.OUTPUT_COLUMN].map(_is_non_empty_cell).sum())
+    typed_accounts = int(output_df[PostTypeRatioTool.OUTPUT_COLUMNS[0]].map(_is_non_empty_cell).sum())
     return {
         "accounts": len(account_df),
         "posts": len(post_df),
@@ -1051,7 +1063,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "按规则统计每个账号文字、图片、视频贴文占比，并在账号表最后新增“帖子类型”列。"
+                    "按规则统计每个账号文字、图片、视频贴文占比，并在账号表最后新增三列占比。"
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
