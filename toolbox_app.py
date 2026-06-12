@@ -2,6 +2,7 @@
 """桌面工具箱：分类工具入口、全局密码本、工具独立配置保存。"""
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import random
@@ -17,31 +18,48 @@ APP_NAME = "JY 临时需求工具箱"
 CONFIG_DIR = Path.home() / ".jy_toolbox"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-COLOR_BG = "#f6f8fa"
-COLOR_SURFACE = "#ffffff"
+COLOR_BG = "#1f1f1f"
+COLOR_SURFACE = "#292929"
+COLOR_SURFACE_RAISED = "#303030"
+COLOR_FIELD = "#232323"
 COLOR_PRIMARY = "#2da44e"
-COLOR_PRIMARY_DARK = "#2a9145"
-COLOR_PRIMARY_HOVER = "#2c974b"
-COLOR_PRIMARY_PRESSED = "#298e46"
-COLOR_TEXT = "#24292f"
-COLOR_MUTED = "#57606a"
-COLOR_DISABLED = "#8c959f"
-COLOR_BORDER = "#d0d7de"
-COLOR_BORDER_LIGHT = "#d8dee4"
-COLOR_ACCENT = "#ddf4ff"
-COLOR_BUTTON = "#f6f8fa"
-COLOR_BUTTON_HOVER = "#eef1f4"
-COLOR_BUTTON_PRESSED = "#eaeef2"
-COLOR_DANGER = "#d73a49"
-COLOR_DANGER_DARK = "#b62332"
-COLOR_DANGER_HOVER = "#cb2431"
-COLOR_DANGER_PRESSED = "#a40e26"
-COLOR_WARNING = "#bf8700"
-COLOR_WARNING_DARK = "#9a6700"
-COLOR_WARNING_PRESSED = "#7d4e00"
+COLOR_PRIMARY_DARK = "#238636"
+COLOR_PRIMARY_HOVER = "#35b85a"
+COLOR_PRIMARY_PRESSED = "#238636"
+COLOR_TEXT = "#f1f3f5"
+COLOR_MUTED = "#b7bdc5"
+COLOR_DISABLED = "#6f7782"
+COLOR_BORDER = "#464646"
+COLOR_BORDER_LIGHT = "#555555"
+COLOR_ACCENT = "#25352c"
+COLOR_ACCENT_TEXT = "#7ee787"
+COLOR_BUTTON = "#353535"
+COLOR_BUTTON_HOVER = "#424242"
+COLOR_BUTTON_PRESSED = "#2f2f2f"
+COLOR_DANGER = "#da3633"
+COLOR_DANGER_DARK = "#a40e26"
+COLOR_DANGER_HOVER = "#f85149"
+COLOR_DANGER_PRESSED = "#b62324"
+COLOR_WARNING = "#9e6a03"
+COLOR_WARNING_DARK = "#7c5200"
+COLOR_WARNING_PRESSED = "#5f3f00"
 COLOR_TOOL_SELECTED = COLOR_PRIMARY
 COLOR_TOOL_UNSELECTED = COLOR_BUTTON
-BUTTON_RADIUS = 6
+APP_FONT = ("Microsoft YaHei UI", 9)
+APP_FONT_BOLD = ("Microsoft YaHei UI", 9, "bold")
+APP_FONT_SMALL = ("Microsoft YaHei UI", 8)
+BUTTON_RADIUS = 5
+
+
+def enable_dark_title_bar(root: tk.Tk | tk.Toplevel) -> None:
+    """在 Windows 上强制使用深色标题栏，不跟随系统主题。"""
+    if os.name != "nt":
+        return
+    root.update_idletasks()
+    hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+    value = ctypes.c_int(1)
+    for attribute in (20, 19):
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
 
 
 def mask_password(password: str) -> str:
@@ -114,9 +132,9 @@ class RoundedButton(tk.Canvas):
         *,
         role: str = "normal",
         width: int | None = None,
-        height: int = 32,
-        padx: int = 12,
-        font: tuple[str, int, str] | tuple[str, int] = ("Microsoft YaHei UI", 10),
+        height: int = 26,
+        padx: int = 9,
+        font: tuple[str, int, str] | tuple[str, int] = APP_FONT,
     ) -> None:
         self.text = text
         self.command = command
@@ -128,7 +146,7 @@ class RoundedButton(tk.Canvas):
         palette = BUTTON_PALETTES[self.role]
         super().__init__(
             parent,
-            width=width or max(64, len(text) * 14 + padx * 2),
+            width=width or max(52, len(text) * 11 + padx * 2),
             height=height,
             bg=self._parent_bg(parent),
             highlightthickness=0,
@@ -222,7 +240,7 @@ def make_rounded_button(
     *,
     role: str = "normal",
     width: int | None = None,
-    height: int = 32,
+    height: int = 26,
 ) -> RoundedButton:
     return RoundedButton(parent, text, command, role=role, width=width, height=height)
 
@@ -280,6 +298,7 @@ class PasswordBookDialog(tk.Toplevel):
         self.title("密码本")
         self.geometry("520x420")
         self.configure(bg=COLOR_BG)
+        enable_dark_title_bar(self)
         self.transient(app.root)
         self.grab_set()
         self.check_vars: list[tk.BooleanVar] = []
@@ -292,9 +311,9 @@ class PasswordBookDialog(tk.Toplevel):
 
         list_outer = ttk.Frame(self)
         list_outer.pack(fill="both", expand=True, padx=14, pady=6)
-        self.canvas = tk.Canvas(list_outer, highlightthickness=0)
+        self.canvas = tk.Canvas(list_outer, highlightthickness=0, bg=COLOR_SURFACE, bd=0)
         scrollbar = ttk.Scrollbar(list_outer, orient="vertical", command=self.canvas.yview)
-        self.inner = ttk.Frame(self.canvas)
+        self.inner = ttk.Frame(self.canvas, style="Card.TFrame")
         self.inner.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.canvas.configure(yscrollcommand=scrollbar.set)
@@ -303,9 +322,9 @@ class PasswordBookDialog(tk.Toplevel):
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", padx=14, pady=(8, 14))
-        make_rounded_button(buttons, "新增密码", self.add_password, role="primary", width=92).pack(side="left")
-        make_rounded_button(buttons, "删除勾选", self.delete_checked, role="danger", width=92).pack(side="left", padx=8)
-        make_rounded_button(buttons, "关闭", self.destroy, width=72).pack(side="right")
+        make_rounded_button(buttons, "新增密码", self.add_password, role="primary", width=82).pack(side="left")
+        make_rounded_button(buttons, "删除勾选", self.delete_checked, role="danger", width=82).pack(side="left", padx=8)
+        make_rounded_button(buttons, "关闭", self.destroy, width=62).pack(side="right")
         self.refresh()
 
     def refresh(self) -> None:
@@ -314,12 +333,12 @@ class PasswordBookDialog(tk.Toplevel):
         self.check_vars.clear()
         passwords = self.app.config.data.setdefault("passwords", [])
         if not passwords:
-            ttk.Label(self.inner, text="暂无密码，请点击“新增密码”。", foreground="#666").pack(anchor="w", pady=8)
+            ttk.Label(self.inner, text="暂无密码，请点击“新增密码”。", foreground=COLOR_MUTED).pack(anchor="w", pady=8)
             return
         for idx, password in enumerate(passwords):
             var = tk.BooleanVar(value=False)
             self.check_vars.append(var)
-            row = ttk.Frame(self.inner)
+            row = ttk.Frame(self.inner, style="Card.TFrame")
             row.pack(fill="x", pady=3)
             ttk.Checkbutton(row, variable=var).pack(side="left")
             ttk.Label(row, text=f"{idx + 1}. {mask_password(str(password))}").pack(side="left", padx=8)
@@ -356,6 +375,7 @@ class DescriptionEditDialog(tk.Toplevel):
         self.title("编辑工具说明")
         self.geometry("560x320")
         self.configure(bg=COLOR_BG)
+        enable_dark_title_bar(self)
         self.transient(tool_frame.app.root)
         self.grab_set()
 
@@ -372,7 +392,7 @@ class DescriptionEditDialog(tk.Toplevel):
             shell,
             height=7,
             wrap="word",
-            bg=COLOR_SURFACE,
+            bg=COLOR_FIELD,
             fg=COLOR_TEXT,
             insertbackground=COLOR_TEXT,
             relief="solid",
@@ -380,7 +400,7 @@ class DescriptionEditDialog(tk.Toplevel):
             highlightthickness=1,
             highlightbackground=COLOR_BORDER,
             highlightcolor=COLOR_PRIMARY,
-            font=("Microsoft YaHei UI", 10),
+            font=APP_FONT,
             padx=10,
             pady=8,
         )
@@ -391,8 +411,8 @@ class DescriptionEditDialog(tk.Toplevel):
         buttons = ttk.Frame(shell, style="Surface.TFrame")
         buttons.pack(fill="x", pady=(12, 0))
         make_rounded_button(buttons, "恢复默认", self.restore_default, width=84).pack(side="left")
-        make_rounded_button(buttons, "取消", self.destroy, width=72).pack(side="right")
-        make_rounded_button(buttons, "保存", self.save, role="primary", width=72).pack(side="right", padx=(0, 8))
+        make_rounded_button(buttons, "取消", self.destroy, width=62).pack(side="right")
+        make_rounded_button(buttons, "保存", self.save, role="primary", width=62).pack(side="right", padx=(0, 8))
         self.bind("<Control-s>", lambda _e: self.save())
 
     def restore_default(self) -> None:
@@ -426,7 +446,7 @@ class BaseToolFrame(ttk.Frame):
             wraplength=780,
             justify="left",
         ).pack(side="left", fill="x", expand=True, padx=(2, 10))
-        make_rounded_button(desc_row, "编辑", self.open_description_editor, width=58, height=30).pack(side="right")
+        make_rounded_button(desc_row, "编辑", self.open_description_editor, width=50, height=24).pack(side="right")
 
     def _description_value(self) -> str:
         return self.description_var.get().strip()
@@ -484,7 +504,7 @@ class PostDedupTool(BaseToolFrame):
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="贴文去重", style="Card.TLabelframe", padding=(14, 12))
+        form = ttk.LabelFrame(self, text="贴文去重", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "输入 Excel：", self.input_var, self.choose_input)
         self._path_row(form, 1, "输出 Excel：", self.output_var, self.choose_output)
@@ -495,16 +515,16 @@ class PostDedupTool(BaseToolFrame):
 
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
-        make_rounded_button(actions, "开始去重", self.run, role="primary", width=92).pack(side="left")
-        make_rounded_button(actions, "保存当前填写", self.save_state, width=112).pack(side="left", padx=10)
-        status_card = ttk.Frame(self, style="Info.TFrame", padding=(14, 12))
+        make_rounded_button(actions, "开始去重", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
-        make_rounded_button(parent, "浏览", command, width=64).grid(row=row, column=2, padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
 
     def choose_input(self) -> None:
         path = filedialog.askopenfilename(
@@ -643,6 +663,7 @@ class ToolListDialog(tk.Toplevel):
         self.geometry("420x560")
         self.minsize(360, 420)
         self.configure(bg=COLOR_BG)
+        enable_dark_title_bar(self)
         self.transient(app.root)
         self.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -655,7 +676,7 @@ class ToolListDialog(tk.Toplevel):
         title_group.pack(side="left", fill="x", expand=True)
         ttk.Label(title_group, text="工具列表", style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(title_group, text="按分类管理工具，拖动工具可移动分类", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
-        make_rounded_button(header, "＋ 新增分类", app.add_category, role="primary", width=108).pack(side="right")
+        make_rounded_button(header, "＋ 新增分类", app.add_category, role="primary", width=96).pack(side="right")
 
         list_card = ttk.Frame(shell, style="Card.TFrame", padding=(12, 12))
         list_card.pack(fill="both", expand=True)
@@ -671,7 +692,7 @@ class ToolListDialog(tk.Toplevel):
 
         footer = ttk.Frame(shell, style="Surface.TFrame")
         footer.pack(fill="x", pady=(14, 0))
-        make_rounded_button(footer, "关闭", self.close, width=72).pack(side="right")
+        make_rounded_button(footer, "关闭", self.close, width=62).pack(side="right")
 
     def close(self) -> None:
         self.app.tool_list_dialog = None
@@ -683,6 +704,7 @@ class ToolboxApp:
         self.root = tk.Tk()
         self.root.title(APP_NAME)
         self.root.geometry("1080x720")
+        enable_dark_title_bar(self.root)
         self.config = ConfigStore()
         self.tools: dict[str, ToolDefinition] = {}
         self.current_tool_frame: BaseToolFrame | None = None
@@ -746,45 +768,125 @@ class ToolboxApp:
             style.theme_use("clam")
         except tk.TclError:
             pass
+        self.root.option_add("*Font", APP_FONT)
+        self.root.option_add("*Background", COLOR_BG)
+        self.root.option_add("*Foreground", COLOR_TEXT)
+        self.root.option_add("*Entry.Background", COLOR_FIELD)
+        self.root.option_add("*Entry.Foreground", COLOR_TEXT)
+        self.root.option_add("*Entry.insertBackground", COLOR_TEXT)
+        self.root.option_add("*Text.Background", COLOR_FIELD)
+        self.root.option_add("*Text.Foreground", COLOR_TEXT)
+        self.root.option_add("*Text.insertBackground", COLOR_TEXT)
+        self.root.option_add("*selectBackground", COLOR_PRIMARY_DARK)
+        self.root.option_add("*selectForeground", "#ffffff")
+
         style.configure("TFrame", background=COLOR_BG)
         style.configure("Surface.TFrame", background=COLOR_BG)
         style.configure("Card.TFrame", background=COLOR_SURFACE, relief="flat")
         style.configure("Info.TFrame", background=COLOR_ACCENT, relief="flat")
-        style.configure("TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
-        style.configure("HeroTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 18, "bold"))
-        style.configure("HeroSubtitle.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 10))
-        style.configure("SectionTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 13, "bold"))
-        style.configure("Muted.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
-        style.configure("CardMuted.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
-        style.configure("InlineDescription.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 10))
-        style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_PRIMARY_DARK, font=("Microsoft YaHei UI", 10))
+        style.configure("TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=APP_FONT)
+        style.configure("HeroTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 15, "bold"))
+        style.configure("HeroSubtitle.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=APP_FONT_SMALL)
+        style.configure("SectionTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 11, "bold"))
+        style.configure("Muted.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=APP_FONT_SMALL)
+        style.configure("CardMuted.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=APP_FONT_SMALL)
+        style.configure("InlineDescription.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=APP_FONT_SMALL)
+        style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_ACCENT_TEXT, font=APP_FONT)
         style.configure(
             "TButton",
-            font=("Microsoft YaHei UI", 10),
-            padding=(12, 5),
+            font=APP_FONT,
+            padding=(8, 3),
             borderwidth=1,
             relief="flat",
             background=COLOR_BUTTON,
             foreground=COLOR_TEXT,
             bordercolor=COLOR_BORDER,
+            lightcolor=COLOR_BORDER,
+            darkcolor=COLOR_BORDER,
         )
-        style.map("TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
+        style.map(
+            "TButton",
+            background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED), ("disabled", COLOR_SURFACE)],
+            foreground=[("disabled", COLOR_DISABLED)],
+        )
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", bordercolor=COLOR_PRIMARY_DARK)
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
-        style.configure("Green.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(12, 5), bordercolor=COLOR_PRIMARY_DARK)
+        style.configure("Green.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(8, 3), bordercolor=COLOR_PRIMARY_DARK)
         style.map("Green.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
-        style.configure("Small.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(10, 5), bordercolor=COLOR_BORDER)
+        style.configure("Small.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(7, 3), bordercolor=COLOR_BORDER)
         style.map("Small.TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
-        style.configure("Danger.TButton", background=COLOR_DANGER, foreground="#ffffff", padding=(10, 5), bordercolor=COLOR_DANGER_DARK)
+        style.configure("Danger.TButton", background=COLOR_DANGER, foreground="#ffffff", padding=(7, 3), bordercolor=COLOR_DANGER_DARK)
         style.map("Danger.TButton", background=[("active", COLOR_DANGER_HOVER), ("pressed", COLOR_DANGER_PRESSED)])
-        style.configure("Tool.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(12, 5), bordercolor=COLOR_BORDER)
+        style.configure("Tool.TButton", background=COLOR_BUTTON, foreground=COLOR_TEXT, padding=(8, 3), bordercolor=COLOR_BORDER)
         style.map("Tool.TButton", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
-        style.configure("SelectedTool.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(12, 5), bordercolor=COLOR_PRIMARY_DARK)
+        style.configure("SelectedTool.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(8, 3), bordercolor=COLOR_PRIMARY_DARK)
         style.map("SelectedTool.TButton", background=[("active", COLOR_PRIMARY_HOVER), ("pressed", COLOR_PRIMARY_PRESSED)])
-        style.configure("TEntry", fieldbackground="#ffffff", padding=(6, 4), bordercolor=COLOR_BORDER, lightcolor=COLOR_BORDER)
+        style.configure(
+            "TEntry",
+            fieldbackground=COLOR_FIELD,
+            background=COLOR_FIELD,
+            foreground=COLOR_TEXT,
+            insertcolor=COLOR_TEXT,
+            padding=(6, 3),
+            bordercolor=COLOR_BORDER,
+            lightcolor=COLOR_BORDER,
+            darkcolor=COLOR_BORDER,
+        )
+        style.map(
+            "TEntry",
+            fieldbackground=[("focus", "#262626"), ("disabled", COLOR_SURFACE)],
+            foreground=[("disabled", COLOR_DISABLED)],
+            bordercolor=[("focus", COLOR_BORDER_LIGHT)],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=COLOR_FIELD,
+            background=COLOR_BUTTON,
+            foreground=COLOR_TEXT,
+            arrowcolor=COLOR_MUTED,
+            bordercolor=COLOR_BORDER,
+            lightcolor=COLOR_BORDER,
+            darkcolor=COLOR_BORDER,
+            padding=(6, 3),
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", COLOR_FIELD), ("focus", "#262626"), ("disabled", COLOR_SURFACE)],
+            foreground=[("readonly", COLOR_TEXT), ("disabled", COLOR_DISABLED)],
+            background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)],
+            bordercolor=[("focus", COLOR_BORDER_LIGHT)],
+        )
+        style.configure(
+            "TCheckbutton",
+            background=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            font=APP_FONT,
+            indicatorcolor=COLOR_FIELD,
+            bordercolor=COLOR_BORDER,
+            focuscolor=COLOR_SURFACE,
+        )
+        style.map(
+            "TCheckbutton",
+            background=[("active", COLOR_SURFACE)],
+            foreground=[("active", COLOR_TEXT), ("disabled", COLOR_DISABLED)],
+            indicatorcolor=[("selected", COLOR_PRIMARY), ("!selected", COLOR_FIELD)],
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=COLOR_BUTTON,
+            troughcolor=COLOR_SURFACE,
+            bordercolor=COLOR_BORDER,
+            arrowcolor=COLOR_MUTED,
+            lightcolor=COLOR_BUTTON,
+            darkcolor=COLOR_BUTTON,
+        )
+        style.map("Vertical.TScrollbar", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
+        style.configure("Horizontal.TScrollbar", background=COLOR_BUTTON, troughcolor=COLOR_SURFACE, bordercolor=COLOR_BORDER, arrowcolor=COLOR_MUTED, lightcolor=COLOR_BUTTON, darkcolor=COLOR_BUTTON)
+        style.map("Horizontal.TScrollbar", background=[("active", COLOR_BUTTON_HOVER), ("pressed", COLOR_BUTTON_PRESSED)])
         style.configure("TLabelframe", background=COLOR_BG, bordercolor=COLOR_BORDER, relief="solid")
+        style.configure("TLabelframe.Label", background=COLOR_BG, foreground=COLOR_TEXT, font=APP_FONT_BOLD)
         style.configure("Card.TLabelframe", background=COLOR_SURFACE, bordercolor=COLOR_BORDER, relief="solid")
-        style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 11, "bold"))
+        style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=APP_FONT_BOLD)
 
     def _build_layout(self) -> None:
         top = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 18))
@@ -800,8 +902,8 @@ class ToolboxApp:
 
         actions = ttk.Frame(top, style="Surface.TFrame")
         actions.pack(side="right")
-        make_rounded_button(actions, "工具列表", self.open_tool_list, role="primary", width=92).pack(side="left", padx=(0, 10))
-        make_rounded_button(actions, "密码本", self.open_password_book, width=78).pack(side="left")
+        make_rounded_button(actions, "工具列表", self.open_tool_list, role="primary", width=82).pack(side="left", padx=(0, 10))
+        make_rounded_button(actions, "密码本", self.open_password_book, width=68).pack(side="left")
 
         body = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 0, 24, 24))
         body.pack(fill="both", expand=True)
@@ -868,10 +970,10 @@ class ToolboxApp:
                 text=category,
                 background=COLOR_SURFACE,
                 foreground=COLOR_TEXT,
-                font=("Microsoft YaHei UI", 10, "bold"),
+                font=APP_FONT_BOLD,
             ).pack(side="left")
-            make_rounded_button(header, "改名", lambda c=category: self.rename_category(c), width=56, height=28).pack(side="right")
-            make_rounded_button(header, "删除", lambda c=category: self.delete_category(c), role="danger", width=56, height=28).pack(side="right", padx=6)
+            make_rounded_button(header, "改名", lambda c=category: self.rename_category(c), width=48, height=24).pack(side="right")
+            make_rounded_button(header, "删除", lambda c=category: self.delete_category(c), role="danger", width=48, height=24).pack(side="right", padx=6)
 
             body = ttk.Frame(inner, style="Card.TFrame")
             body.pack(fill="x")
@@ -890,7 +992,7 @@ class ToolboxApp:
                 tool.name,
                 lambda k=key: self.open_tool(k),
                 role=role,
-                height=32,
+                height=26,
             )
             btn.pack(fill="x", pady=4)
             btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k), add="+")
