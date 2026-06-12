@@ -884,7 +884,8 @@ class SourceMediaCampRatioTool(BaseToolFrame):
     SHARED_ACCOUNT_COLUMN = "分享贴账号名"
     STANCE_COLUMN = "账号立场归属"
     ACCOUNT_TYPE_COLUMN = "账号类型归属"
-    OUTPUT_COLUMNS = ("账号立场归属占比", "账号类型归属占比")
+    OFFICIAL_SOURCE_TYPE = "政府/军警机关"
+    OUTPUT_COLUMNS = ("账号立场归属占比", "账号类型归属占比", "官方信源占比")
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, CREATION_TYPE_COLUMN, SHARED_ACCOUNT_COLUMN]
     REQUIRED_DICT_COLUMNS = [SHARED_ACCOUNT_COLUMN, STANCE_COLUMN, ACCOUNT_TYPE_COLUMN]
 
@@ -1170,6 +1171,12 @@ def _format_category_ratios(counts: dict[str, int]) -> str:
     return "；".join(f"{name}：{count / total * 100:.2f}%" for name, count in counts.items())
 
 
+def _format_single_percentage(count: int, total: int) -> str:
+    if total <= 0:
+        return ""
+    return f"{count / total * 100:.2f}%"
+
+
 def calculate_source_media_camp_ratios_excel(
     account_input_path: Path,
     post_input_path: Path,
@@ -1243,7 +1250,7 @@ def calculate_source_media_camp_ratios_excel(
     matched_share_posts = int(share_work["__shared_account_key__"].isin(dictionary_keys).sum())
 
     if progress is not None:
-        progress(70, "正在汇总每个账号的立场和类型占比……")
+        progress(70, "正在汇总每个账号的立场、类型和官方信源占比……")
     ratios_by_homepage: dict[str, dict[str, str]] = {}
     for homepage, homepage_rows in share_work.groupby("__homepage_key__", sort=False):
         stance_counts = {
@@ -1258,13 +1265,16 @@ def calculate_source_media_camp_ratios_excel(
                 homepage_rows["__account_type__"].map(_is_non_empty_cell), "__account_type__"
             ].value_counts(sort=False).items()
         }
+        official_source_count = type_counts.get(SourceMediaCampRatioTool.OFFICIAL_SOURCE_TYPE, 0)
+        total_typed_sources = sum(type_counts.values())
         ratios_by_homepage[str(homepage)] = {
             "账号立场归属占比": _format_category_ratios(stance_counts),
             "账号类型归属占比": _format_category_ratios(type_counts),
+            "官方信源占比": _format_single_percentage(official_source_count, total_typed_sources),
         }
 
     if progress is not None:
-        progress(82, "正在写回账号表最后两列媒体阵营分布……")
+        progress(82, "正在写回账号表最后三列媒体阵营分布……")
     output_df = account_df.copy()
     drop_columns = [column for column in SourceMediaCampRatioTool.OUTPUT_COLUMNS if column in output_df.columns]
     if drop_columns:
