@@ -7,6 +7,7 @@ import json
 import os
 import random
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -435,6 +436,9 @@ class BaseToolFrame(ttk.Frame):
         self.state = state
         self.description = description
         self.description_var = tk.StringVar(value=description)
+        self._background_running = False
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_bar: ttk.Progressbar | None = None
 
         desc_row = ttk.Frame(self, style="Surface.TFrame")
         desc_row.pack(fill="x", padx=22, pady=(8, 6))
@@ -491,6 +495,63 @@ class BaseToolFrame(ttk.Frame):
     def save_state(self) -> None:
         raise NotImplementedError
 
+    def add_progress_bar(self, parent: tk.Widget) -> ttk.Progressbar:
+        """为工具动作增加统一进度条；实际耗时任务必须通过后台线程执行。"""
+        self.progress_bar = ttk.Progressbar(parent, variable=self.progress_var, maximum=100, mode="determinate")
+        self.progress_bar.pack(fill="x", pady=(8, 0))
+        return self.progress_bar
+
+    def set_progress(self, value: float, message: str | None = None) -> None:
+        self.progress_var.set(max(0, min(100, value)))
+        if message is not None and hasattr(self, "status_var"):
+            self.status_var.set(message)
+
+    def run_in_background(
+        self,
+        task: Callable[[Callable[[float, str | None], None]], Any],
+        on_success: Callable[[Any], None],
+        *,
+        start_message: str = "正在后台处理，请稍候……",
+        error_message: str = "处理失败，请检查文件、列名或密码本。",
+    ) -> None:
+        if self._background_running:
+            messagebox.showinfo("提示", "当前工具正在后台执行，请等待完成。", parent=self)
+            return
+        self._background_running = True
+        if self.progress_bar is not None:
+            self.progress_bar.configure(mode="indeterminate")
+            self.progress_bar.start(12)
+        self.set_progress(0, start_message)
+
+        def progress(value: float, message: str | None = None) -> None:
+            self.after(0, lambda: self.set_progress(value, message))
+
+        def worker() -> None:
+            try:
+                result = task(progress)
+            except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
+                self.after(0, lambda exc=exc: self._finish_background_error(exc, error_message))
+            else:
+                self.after(0, lambda: self._finish_background_success(result, on_success))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_background_success(self, result: Any, on_success: Callable[[Any], None]) -> None:
+        self._background_running = False
+        if self.progress_bar is not None:
+            self.progress_bar.stop()
+            self.progress_bar.configure(mode="determinate")
+        self.set_progress(100)
+        on_success(result)
+
+    def _finish_background_error(self, exc: Exception, error_message: str) -> None:
+        self._background_running = False
+        if self.progress_bar is not None:
+            self.progress_bar.stop()
+            self.progress_bar.configure(mode="determinate")
+        self.set_progress(0, error_message)
+        messagebox.showerror("处理失败", str(exc), parent=self)
+
 
 class PostDedupTool(BaseToolFrame):
     REQUIRED_COLUMNS = ["贴文url", "点赞数", "分享数", "评论数"]
@@ -520,6 +581,7 @@ class PostDedupTool(BaseToolFrame):
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
@@ -571,21 +633,24 @@ class PostDedupTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
             return
         self.save_state()
-        try:
-            result = deduplicate_posts_excel(
+
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            progress(10, "正在后台读取并去重 Excel……")
+            return deduplicate_posts_excel(
                 Path(input_path),
                 Path(output_path),
                 self.app.config.data.get("passwords", []),
                 sheet_name,
+                progress,
             )
-        except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
-            messagebox.showerror("处理失败", str(exc), parent=self)
-            self.status_var.set("处理失败，请检查文件、列名或密码本。")
-            return
-        self.status_var.set(
-            f"完成：原始 {result['original']} 行，删除 {result['removed']} 行，保留 {result['kept']} 行。输出：{output_path}"
-        )
-        messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set(
+                f"完成：原始 {result['original']} 行，删除 {result['removed']} 行，保留 {result['kept']} 行。输出：{output_path}"
+            )
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        self.run_in_background(task, on_success, start_message="已开始后台执行贴文去重……")
 
 
 def read_excel_with_passwords(path: Path, passwords: list[str], sheet_name: str | int) -> Any:
@@ -626,17 +691,27 @@ def read_excel_with_passwords(path: Path, passwords: list[str], sheet_name: str 
         raise RuntimeError("读取失败：已按密码本逐个尝试，但没有密码可以打开该 Excel。") from last_error
 
 
-def deduplicate_posts_excel(input_path: Path, output_path: Path, passwords: list[str], sheet_name: str | int = 0) -> dict[str, int]:
+def deduplicate_posts_excel(
+    input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
     import pandas as pd
 
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在：{input_path}")
     df = read_excel_with_passwords(input_path, passwords, sheet_name)
+    if progress is not None:
+        progress(35, "已读取 Excel，正在检查必要列……")
     missing = [col for col in PostDedupTool.REQUIRED_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f"Excel 缺少必要列：{', '.join(missing)}")
 
     work = df.copy()
+    if progress is not None:
+        progress(55, "正在计算重复贴文保留规则……")
     score_cols = ["点赞数", "分享数", "评论数"]
     numeric_scores = work[score_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
     work["__dedup_score__"] = numeric_scores.sum(axis=1)
@@ -649,8 +724,240 @@ def deduplicate_posts_excel(input_path: Path, output_path: Path, passwords: list
         .drop(columns=["__dedup_score__", "__dedup_random__", "__dedup_order__"])
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(85, "正在写出处理结果……")
     kept.to_excel(output_path, index=False)
     return {"original": len(df), "removed": len(df) - len(kept), "kept": len(kept)}
+
+class PostTypeRatioTool(BaseToolFrame):
+    ACCOUNT_URL_COLUMN = "FB主页"
+    POST_URL_COLUMN = "主页url"
+    OUTPUT_COLUMN = "帖子类型"
+    REQUIRED_POST_COLUMNS = ["主页url", "图片附件", "创作类型", "标题", "帖子正文"]
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, app, state, description)
+        self.account_input_var = tk.StringVar(value=state.get("account_input_path", ""))
+        self.post_input_var = tk.StringVar(value=state.get("post_input_path", ""))
+        self.output_var = tk.StringVar(value=state.get("output_path", ""))
+        self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
+        self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self._build_form()
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text="贴文类型占比（%）", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
+        ttk.Label(form, text="账号表工作表：").grid(row=3, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=3, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(form, text="留空则读取第一个工作表").grid(row=3, column=2, sticky="w", padx=10, pady=8)
+        ttk.Label(form, text="贴文表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
+        form.columnconfigure(1, weight=1)
+
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
+
+    def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择账号 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        self.account_input_var.set(path)
+        if not self.output_var.get().strip():
+            p = Path(path)
+            self.output_var.set(str(p.with_name(f"{p.stem}_帖子类型占比.xlsx")))
+        self.save_state()
+
+    def choose_post_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择贴文 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if path:
+            self.post_input_var.set(path)
+            self.save_state()
+
+    def choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="保存账号表处理结果",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+        )
+        if path:
+            self.output_var.set(path)
+            self.save_state()
+
+    def save_state(self) -> None:
+        self.app.config.set_tool_state(
+            "post_type_ratio",
+            {
+                "account_input_path": self.account_input_var.get().strip(),
+                "post_input_path": self.post_input_var.get().strip(),
+                "output_path": self.output_var.get().strip(),
+                "account_sheet_name": self.account_sheet_var.get().strip(),
+                "post_sheet_name": self.post_sheet_var.get().strip(),
+            },
+        )
+        self.status_var.set("当前工具填写内容已保存。")
+
+    def run(self) -> None:
+        account_input_path = self.account_input_var.get().strip()
+        post_input_path = self.post_input_var.get().strip()
+        output_path = self.output_var.get().strip()
+        account_sheet_name = self.account_sheet_var.get().strip() or 0
+        post_sheet_name = self.post_sheet_var.get().strip() or 0
+        if not account_input_path:
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
+            return
+        if not post_input_path:
+            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            return
+        if not output_path:
+            messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
+            return
+        self.save_state()
+
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            return calculate_post_type_ratios_excel(
+                Path(account_input_path),
+                Path(post_input_path),
+                Path(output_path),
+                self.app.config.data.get("passwords", []),
+                account_sheet_name,
+                post_sheet_name,
+                progress,
+            )
+
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set(
+                "完成：账号 {accounts} 行，贴文 {posts} 行，已匹配 {matched_accounts} 个账号，"
+                "有可判断类型的账号 {typed_accounts} 个。输出：{output}".format(
+                    accounts=result["accounts"],
+                    posts=result["posts"],
+                    matched_accounts=result["matched_accounts"],
+                    typed_accounts=result["typed_accounts"],
+                    output=output_path,
+                )
+            )
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        self.run_in_background(task, on_success, start_message="已开始后台统计贴文类型占比……")
+
+
+def _is_non_empty_cell(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip()
+    return bool(text) and text.lower() != "nan"
+
+
+def _normalized_key(value: Any) -> str:
+    return str(value).strip() if _is_non_empty_cell(value) else ""
+
+
+def classify_post_type(row: Any) -> str:
+    attachments = "" if not _is_non_empty_cell(row.get("图片附件")) else str(row.get("图片附件"))
+    if attachments.count("origin_url_md5") >= 2:
+        return "图片"
+    homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
+    post_url = "" if not _is_non_empty_cell(row.get("贴文url")) else str(row.get("贴文url"))
+    if "/videos/" in homepage_url or "/videos/" in post_url:
+        return "视频"
+    if str(row.get("创作类型", "")).strip().lower() == "common":
+        if _is_non_empty_cell(row.get("标题")) or _is_non_empty_cell(row.get("帖子正文")):
+            return "文字"
+    return ""
+
+
+def _format_post_type_ratio(counts: dict[str, int]) -> str:
+    total = sum(counts.values())
+    if total <= 0:
+        return ""
+    return "；".join(f"{name}：{counts.get(name, 0) / total * 100:.2f}%" for name in ("文字", "图片", "视频"))
+
+
+def calculate_post_type_ratios_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    import pandas as pd
+
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if PostTypeRatioTool.ACCOUNT_URL_COLUMN not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{PostTypeRatioTool.ACCOUNT_URL_COLUMN}")
+    missing_posts = [col for col in PostTypeRatioTool.REQUIRED_POST_COLUMNS if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(50, "正在识别每条贴文的文字、图片、视频类型……")
+    work = post_df.copy()
+    work["__post_type__"] = work.apply(classify_post_type, axis=1)
+    typed_work = work[work["__post_type__"].isin(["文字", "图片", "视频"])].copy()
+
+    ratios_by_homepage: dict[str, str] = {}
+    if not typed_work.empty:
+        grouped = typed_work.groupby(PostTypeRatioTool.POST_URL_COLUMN)["__post_type__"].value_counts()
+        for homepage, counts_series in grouped.groupby(level=0):
+            counts = {str(type_name): int(count) for (_, type_name), count in counts_series.items()}
+            ratios_by_homepage[_normalized_key(homepage)] = _format_post_type_ratio(counts)
+
+    if progress is not None:
+        progress(75, "正在写回账号表最后一列“帖子类型”……")
+    output_df = account_df.copy()
+    if PostTypeRatioTool.OUTPUT_COLUMN in output_df.columns:
+        output_df = output_df.drop(columns=[PostTypeRatioTool.OUTPUT_COLUMN])
+    account_keys = output_df[PostTypeRatioTool.ACCOUNT_URL_COLUMN].map(_normalized_key)
+    output_df[PostTypeRatioTool.OUTPUT_COLUMN] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(90, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(_normalized_key(v) for v in post_df[PostTypeRatioTool.POST_URL_COLUMN])).sum())
+    typed_accounts = int(output_df[PostTypeRatioTool.OUTPUT_COLUMN].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "matched_accounts": matched_accounts,
+        "typed_accounts": typed_accounts,
+    }
+
 
 
 class ToolListDialog(tk.Toplevel):
@@ -734,6 +1041,20 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostDedupTool(
                     parent, app, state, app.get_tool_description("post_dedup")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="post_type_ratio",
+                name="贴文类型占比（%）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
+                    "按规则统计每个账号文字、图片、视频贴文占比，并在账号表最后新增“帖子类型”列。"
+                ),
+                factory=lambda parent, app, state: PostTypeRatioTool(
+                    parent, app, state, app.get_tool_description("post_type_ratio")
                 ),
             )
         )
