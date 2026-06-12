@@ -17,6 +17,15 @@ APP_NAME = "JY 临时需求工具箱"
 CONFIG_DIR = Path.home() / ".jy_toolbox"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
+COLOR_BG = "#eef3f8"
+COLOR_SURFACE = "#ffffff"
+COLOR_PRIMARY = "#2563eb"
+COLOR_PRIMARY_DARK = "#1d4ed8"
+COLOR_TEXT = "#172033"
+COLOR_MUTED = "#64748b"
+COLOR_BORDER = "#dbe5f0"
+COLOR_ACCENT = "#eaf1ff"
+
 
 def mask_password(password: str) -> str:
     """隐藏密码中间字符，例如 qwe123 -> q****3。"""
@@ -80,7 +89,8 @@ class PasswordBookDialog(tk.Toplevel):
         super().__init__(app.root)
         self.app = app
         self.title("密码本")
-        self.geometry("460x360")
+        self.geometry("520x420")
+        self.configure(bg=COLOR_BG)
         self.transient(app.root)
         self.grab_set()
         self.check_vars: list[tk.BooleanVar] = []
@@ -150,13 +160,19 @@ class PasswordBookDialog(tk.Toplevel):
 
 class BaseToolFrame(ttk.Frame):
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
-        super().__init__(parent)
+        super().__init__(parent, style="Surface.TFrame")
         self.app = app
         self.state = state
         self.description = description
-        ttk.Label(self, text=description, wraplength=760, justify="left", foreground="#444").pack(
-            fill="x", padx=14, pady=(14, 10)
-        )
+        desc_card = ttk.Frame(self, style="Card.TFrame", padding=(18, 16))
+        desc_card.pack(fill="x", padx=22, pady=(22, 12))
+        ttk.Label(
+            desc_card,
+            text=description,
+            wraplength=820,
+            justify="left",
+            style="Description.TLabel",
+        ).pack(fill="x")
 
     def save_state(self) -> None:
         raise NotImplementedError
@@ -174,8 +190,8 @@ class PostDedupTool(BaseToolFrame):
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="贴文去重")
-        form.pack(fill="x", padx=14, pady=8)
+        form = ttk.LabelFrame(self, text="贴文去重", style="Card.TLabelframe", padding=(14, 12))
+        form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "输入 Excel：", self.input_var, self.choose_input)
         self._path_row(form, 1, "输出 Excel：", self.output_var, self.choose_output)
         ttk.Label(form, text="工作表名：").grid(row=2, column=0, sticky="w", padx=10, pady=8)
@@ -183,13 +199,13 @@ class PostDedupTool(BaseToolFrame):
         ttk.Label(form, text="留空则读取第一个工作表").grid(row=2, column=2, sticky="w", padx=10, pady=8)
         form.columnconfigure(1, weight=1)
 
-        actions = ttk.Frame(self)
-        actions.pack(fill="x", padx=14, pady=8)
-        ttk.Button(actions, text="开始去重", command=self.run).pack(side="left")
-        ttk.Button(actions, text="保存当前填写", command=self.save_state).pack(side="left", padx=8)
-        ttk.Label(self, textvariable=self.status_var, wraplength=760, foreground="#1f5f99").pack(
-            fill="x", padx=14, pady=8
-        )
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        ttk.Button(actions, text="开始去重", command=self.run, style="Primary.TButton").pack(side="left")
+        ttk.Button(actions, text="保存当前填写", command=self.save_state).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(14, 12))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
@@ -323,6 +339,51 @@ def deduplicate_posts_excel(input_path: Path, output_path: Path, passwords: list
     return {"original": len(df), "removed": len(df) - len(kept), "kept": len(kept)}
 
 
+class ToolListDialog(tk.Toplevel):
+    """以弹窗承载工具列表，避免主界面左侧长期占位。"""
+
+    def __init__(self, app: "ToolboxApp") -> None:
+        super().__init__(app.root)
+        self.app = app
+        self.title("工具列表")
+        self.geometry("420x560")
+        self.minsize(360, 420)
+        self.configure(bg=COLOR_BG)
+        self.transient(app.root)
+        self.protocol("WM_DELETE_WINDOW", self.close)
+
+        shell = ttk.Frame(self, style="Surface.TFrame", padding=(18, 16))
+        shell.pack(fill="both", expand=True)
+
+        header = ttk.Frame(shell, style="Surface.TFrame")
+        header.pack(fill="x", pady=(0, 14))
+        title_group = ttk.Frame(header, style="Surface.TFrame")
+        title_group.pack(side="left", fill="x", expand=True)
+        ttk.Label(title_group, text="工具列表", style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(title_group, text="按分类管理工具，拖动工具可移动分类", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
+        ttk.Button(header, text="＋ 新增分类", command=app.add_category, style="Primary.TButton").pack(side="right")
+
+        list_card = ttk.Frame(shell, style="Card.TFrame", padding=(12, 12))
+        list_card.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(list_card, highlightthickness=0, bg=COLOR_SURFACE, bd=0)
+        scrollbar = ttk.Scrollbar(list_card, orient="vertical", command=self.canvas.yview)
+        self.container = ttk.Frame(self.canvas, style="Card.TFrame")
+        self.container.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.window_id = self.canvas.create_window((0, 0), window=self.container, anchor="nw")
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.window_id, width=e.width))
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        footer = ttk.Frame(shell, style="Surface.TFrame")
+        footer.pack(fill="x", pady=(14, 0))
+        ttk.Button(footer, text="关闭", command=self.close).pack(side="right")
+
+    def close(self) -> None:
+        self.app.tool_list_dialog = None
+        self.destroy()
+
+
 class ToolboxApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
@@ -336,7 +397,8 @@ class ToolboxApp:
         self.category_frames: dict[str, tk.Frame] = {}
         self.category_body_frames: dict[str, ttk.Frame] = {}
         self.category_drop_widgets: dict[str, set[tk.Widget]] = {}
-        self.tool_list_visible = True
+        self.tool_list_dialog: ToolListDialog | None = None
+        self._configure_styles()
         self._register_tools()
         self._ensure_defaults()
         self._build_layout()
@@ -376,86 +438,118 @@ class ToolboxApp:
                 tool_categories[key] = tool.default_category
         self.config.save()
 
+    def _configure_styles(self) -> None:
+        self.root.configure(bg=COLOR_BG)
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("TFrame", background=COLOR_BG)
+        style.configure("Surface.TFrame", background=COLOR_BG)
+        style.configure("Card.TFrame", background=COLOR_SURFACE, relief="flat")
+        style.configure("Info.TFrame", background=COLOR_ACCENT, relief="flat")
+        style.configure("TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
+        style.configure("HeroTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 19, "bold"))
+        style.configure("HeroSubtitle.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 10))
+        style.configure("SectionTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 13, "bold"))
+        style.configure("Muted.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
+        style.configure("Description.TLabel", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
+        style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_PRIMARY_DARK, font=("Microsoft YaHei UI", 10))
+        style.configure("TButton", font=("Microsoft YaHei UI", 10), padding=(12, 7), borderwidth=0)
+        style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff")
+        style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
+        style.configure("TEntry", fieldbackground="#ffffff", padding=(8, 6))
+        style.configure("TLabelframe", background=COLOR_BG, bordercolor=COLOR_BORDER, relief="solid")
+        style.configure("Card.TLabelframe", background=COLOR_SURFACE, bordercolor=COLOR_BORDER, relief="solid")
+        style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 11, "bold"))
+
     def _build_layout(self) -> None:
-        top = ttk.Frame(self.root)
-        top.pack(fill="x", padx=10, pady=8)
-        ttk.Label(top, text=APP_NAME, font=("Arial", 15, "bold")).pack(side="left")
-        ttk.Button(top, text="密码本", command=self.open_password_book).pack(side="right")
+        top = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 18))
+        top.pack(fill="x")
+        title_group = ttk.Frame(top, style="Surface.TFrame")
+        title_group.pack(side="left", fill="x", expand=True)
+        ttk.Label(title_group, text=APP_NAME, style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            title_group,
+            text="轻量、清爽的临时需求处理工作台",
+            style="HeroSubtitle.TLabel",
+        ).pack(anchor="w", pady=(4, 0))
 
-        main = ttk.PanedWindow(self.root, orient="horizontal")
-        main.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        actions = ttk.Frame(top, style="Surface.TFrame")
+        actions.pack(side="right")
+        ttk.Button(
+            actions,
+            text="工具列表",
+            command=self.open_tool_list,
+            style="Primary.TButton",
+        ).pack(side="left", padx=(0, 10))
+        ttk.Button(actions, text="密码本", command=self.open_password_book).pack(side="left")
 
-        left = ttk.Frame(main, width=300)
-        main.add(left, weight=0)
-        right = ttk.Frame(main)
-        main.add(right, weight=1)
-
-        switch_row = ttk.Frame(left)
-        switch_row.pack(fill="x", pady=(0, 8))
-        ttk.Label(switch_row, text="工具列表", font=("Arial", 11, "bold")).pack(side="left")
-        ttk.Button(switch_row, text="＋分类", command=self.add_category).pack(side="right")
-        ttk.Button(switch_row, text="切换工具列表", command=self.toggle_tool_list).pack(side="right", padx=6)
-
-        self.tool_list_panel = ttk.Frame(left)
-        self.tool_list_panel.pack(fill="both", expand=True)
-        self.tool_canvas = tk.Canvas(self.tool_list_panel, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(self.tool_list_panel, orient="vertical", command=self.tool_canvas.yview)
-        self.tool_list_container = ttk.Frame(self.tool_canvas)
-        self.tool_list_container.bind(
-            "<Configure>", lambda _e: self.tool_canvas.configure(scrollregion=self.tool_canvas.bbox("all"))
-        )
-        self.tool_canvas.create_window((0, 0), window=self.tool_list_container, anchor="nw")
-        self.tool_canvas.configure(yscrollcommand=scrollbar.set)
-        self.tool_canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        self.content = ttk.Frame(right)
+        body = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 0, 24, 24))
+        body.pack(fill="both", expand=True)
+        self.content = ttk.Frame(body, style="Surface.TFrame")
         self.content.pack(fill="both", expand=True)
 
     def open_password_book(self) -> None:
         PasswordBookDialog(self)
 
-    def toggle_tool_list(self) -> None:
-        self.tool_list_visible = not self.tool_list_visible
-        if self.tool_list_visible:
-            self.tool_list_panel.pack(fill="both", expand=True)
-        else:
-            self.tool_list_panel.pack_forget()
+    def open_tool_list(self) -> None:
+        if self.tool_list_dialog is not None and self.tool_list_dialog.winfo_exists():
+            self.tool_list_dialog.lift()
+            self.tool_list_dialog.focus_force()
+            return
+        self.tool_list_dialog = ToolListDialog(self)
+        self.refresh_tool_list()
 
     def refresh_tool_list(self) -> None:
-        for child in self.tool_list_container.winfo_children():
+        if self.tool_list_dialog is None or not self.tool_list_dialog.winfo_exists():
+            return
+        container = self.tool_list_dialog.container
+        for child in container.winfo_children():
             child.destroy()
         self.category_frames.clear()
         self.category_body_frames.clear()
         self.category_drop_widgets.clear()
         categories = list(self.config.data.setdefault("categories", []))
         for category in categories:
-            outer = tk.Canvas(self.tool_list_container, highlightthickness=0, height=72)
-            outer.pack(fill="x", padx=4, pady=8)
-            inner = ttk.Frame(outer)
+            outer = tk.Canvas(container, highlightthickness=0, height=96, bg=COLOR_SURFACE, bd=0)
+            outer.pack(fill="x", padx=2, pady=8)
+            inner = ttk.Frame(outer, style="Card.TFrame", padding=(10, 8))
             window_id = outer.create_window((8, 8), window=inner, anchor="nw")
-            rect_id = outer.create_rectangle(2, 2, 10, 10, dash=(4, 3), outline="#888")
+            rect_id = outer.create_rectangle(2, 2, 10, 10, dash=(5, 3), outline=COLOR_BORDER, width=2)
 
             def resize(event: tk.Event, canvas: tk.Canvas = outer, win: int = window_id, rect: int = rect_id) -> None:
-                width = max(120, canvas.winfo_width() - 16)
+                width = max(220, canvas.winfo_width() - 16)
                 canvas.itemconfigure(win, width=width)
                 needed = event.height + 16
                 canvas.configure(height=needed)
                 canvas.coords(rect, 2, 2, max(4, canvas.winfo_width() - 2), needed - 2)
 
             inner.bind("<Configure>", resize)
-            outer.bind("<Configure>", lambda e, c=outer, r=rect_id: c.coords(r, 2, 2, max(4, e.width - 2), max(4, int(c.cget("height")) - 2)))
+            outer.bind(
+                "<Configure>",
+                lambda e, c=outer, r=rect_id: c.coords(
+                    r, 2, 2, max(4, e.width - 2), max(4, int(c.cget("height")) - 2)
+                ),
+            )
             self.category_frames[category] = outer
             self.category_drop_widgets[category] = {outer, inner}
 
-            header = ttk.Frame(inner)
-            header.pack(fill="x", padx=8, pady=(4, 2))
-            ttk.Label(header, text=category, font=("Arial", 10, "bold")).pack(side="left")
+            header = ttk.Frame(inner, style="Card.TFrame")
+            header.pack(fill="x", pady=(0, 6))
+            ttk.Label(
+                header,
+                text=category,
+                background=COLOR_SURFACE,
+                foreground=COLOR_TEXT,
+                font=("Microsoft YaHei UI", 10, "bold"),
+            ).pack(side="left")
             ttk.Button(header, text="改名", command=lambda c=category: self.rename_category(c)).pack(side="right")
-            ttk.Button(header, text="删除", command=lambda c=category: self.delete_category(c)).pack(side="right", padx=3)
+            ttk.Button(header, text="删除", command=lambda c=category: self.delete_category(c)).pack(side="right", padx=6)
 
-            body = ttk.Frame(inner)
-            body.pack(fill="x", padx=8, pady=(2, 8))
+            body = ttk.Frame(inner, style="Card.TFrame")
+            body.pack(fill="x")
             self.category_body_frames[category] = body
             self.category_drop_widgets[category].add(body)
             body.bind("<ButtonRelease-1>", lambda _e, c=category: self.drop_tool_to_category(c))
@@ -465,8 +559,8 @@ class ToolboxApp:
             body = self.category_body_frames.get(category)
             if body is None:
                 continue
-            btn = ttk.Button(body, text=tool.name, command=lambda k=key: self.open_tool(k))
-            btn.pack(fill="x", pady=3)
+            btn = ttk.Button(body, text=f"  {tool.name}", command=lambda k=key: self.open_tool(k))
+            btn.pack(fill="x", pady=4)
             btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k))
             btn.bind("<ButtonRelease-1>", self.finish_drag)
 
