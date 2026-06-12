@@ -57,6 +57,7 @@ class ConfigStore:
             "categories": [],
             "tool_categories": {},
             "tool_states": {},
+            "tool_descriptions": {},
         }
         self.load()
 
@@ -164,15 +165,69 @@ class BaseToolFrame(ttk.Frame):
         self.app = app
         self.state = state
         self.description = description
+        self.description_status_var = tk.StringVar(value="可直接编辑说明，离开文本框会自动保存。")
         desc_card = ttk.Frame(self, style="Card.TFrame", padding=(18, 16))
         desc_card.pack(fill="x", padx=22, pady=(22, 12))
+        desc_header = ttk.Frame(desc_card, style="Card.TFrame")
+        desc_header.pack(fill="x", pady=(0, 8))
+        ttk.Label(desc_header, text="工具说明", style="DescriptionTitle.TLabel").pack(side="left")
+        ttk.Button(desc_header, text="恢复默认说明", command=self.reset_description).pack(side="right")
+        self.description_text = tk.Text(
+            desc_card,
+            height=4,
+            wrap="word",
+            bg=COLOR_SURFACE,
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_TEXT,
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground=COLOR_BORDER,
+            highlightcolor=COLOR_PRIMARY,
+            font=("Microsoft YaHei UI", 10),
+            padx=10,
+            pady=8,
+        )
+        self.description_text.pack(fill="x")
+        self.description_text.insert("1.0", description)
+        self.description_text.bind("<FocusOut>", lambda _e: self.save_description())
+        self.description_text.bind("<Control-s>", self._save_description_shortcut)
         ttk.Label(
             desc_card,
-            text=description,
-            wraplength=820,
-            justify="left",
-            style="Description.TLabel",
-        ).pack(fill="x")
+            textvariable=self.description_status_var,
+            style="DescriptionHint.TLabel",
+        ).pack(anchor="w", pady=(8, 0))
+
+    def _description_value(self) -> str:
+        return self.description_text.get("1.0", "end-1c").strip()
+
+    def _save_description_shortcut(self, _event: tk.Event) -> str:
+        self.save_description()
+        return "break"
+
+    def reset_description(self) -> None:
+        tool_key = self.app.current_tool_key
+        if not tool_key:
+            return
+        default_description = self.app.tools[tool_key].description
+        self.description_text.delete("1.0", "end")
+        self.description_text.insert("1.0", default_description)
+        self.save_description()
+
+    def save_description(self) -> None:
+        tool_key = self.app.current_tool_key
+        if not tool_key:
+            return
+        description = self._description_value()
+        default_description = self.app.tools[tool_key].description
+        descriptions = self.app.config.data.setdefault("tool_descriptions", {})
+        if description and description != default_description:
+            descriptions[tool_key] = description
+        else:
+            descriptions.pop(tool_key, None)
+        self.description = description or default_description
+        self.app.config.save()
+        self.description_status_var.set("说明已保存。")
 
     def save_state(self) -> None:
         raise NotImplementedError
@@ -417,13 +472,20 @@ class ToolboxApp:
                     "优先保留总和更大的记录；如果总和相同，则随机保留其中一条。"
                 ),
                 factory=lambda parent, app, state: PostDedupTool(
-                    parent, app, state, app.tools["post_dedup"].description
+                    parent, app, state, app.get_tool_description("post_dedup")
                 ),
             )
         )
 
     def add_tool(self, tool: ToolDefinition) -> None:
         self.tools[tool.key] = tool
+
+    def get_tool_description(self, key: str) -> str:
+        descriptions = self.config.data.setdefault("tool_descriptions", {})
+        custom_description = descriptions.get(key)
+        if isinstance(custom_description, str) and custom_description.strip():
+            return custom_description.strip()
+        return self.tools[key].description
 
     def _ensure_defaults(self) -> None:
         categories = self.config.data.setdefault("categories", [])
@@ -455,6 +517,13 @@ class ToolboxApp:
         style.configure("SectionTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 13, "bold"))
         style.configure("Muted.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
         style.configure("Description.TLabel", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
+        style.configure(
+            "DescriptionTitle.TLabel",
+            background=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure("DescriptionHint.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
         style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_PRIMARY_DARK, font=("Microsoft YaHei UI", 10))
         style.configure("TButton", font=("Microsoft YaHei UI", 10), padding=(12, 7), borderwidth=0)
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff")
@@ -639,6 +708,7 @@ class ToolboxApp:
     def open_tool(self, key: str) -> None:
         if self.current_tool_frame is not None:
             try:
+                self.current_tool_frame.save_description()
                 self.current_tool_frame.save_state()
             except Exception:
                 pass
@@ -651,6 +721,7 @@ class ToolboxApp:
 
     def on_close(self) -> None:
         if self.current_tool_frame is not None:
+            self.current_tool_frame.save_description()
             self.current_tool_frame.save_state()
         self.config.save()
         self.root.destroy()
