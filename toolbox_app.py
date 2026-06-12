@@ -17,14 +17,18 @@ APP_NAME = "JY 临时需求工具箱"
 CONFIG_DIR = Path.home() / ".jy_toolbox"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-COLOR_BG = "#eef3f8"
+COLOR_BG = "#f6f7f8"
 COLOR_SURFACE = "#ffffff"
-COLOR_PRIMARY = "#2563eb"
-COLOR_PRIMARY_DARK = "#1d4ed8"
-COLOR_TEXT = "#172033"
-COLOR_MUTED = "#64748b"
-COLOR_BORDER = "#dbe5f0"
-COLOR_ACCENT = "#eaf1ff"
+COLOR_PRIMARY = "#18a558"
+COLOR_PRIMARY_DARK = "#159149"
+COLOR_TEXT = "#1f2933"
+COLOR_MUTED = "#666666"
+COLOR_BORDER = "#d9d9d9"
+COLOR_ACCENT = "#edf8f2"
+COLOR_DANGER = "#d93025"
+COLOR_DANGER_DARK = "#b3261e"
+COLOR_TOOL_SELECTED = "#2d2d2d"
+COLOR_TOOL_UNSELECTED = "#f4f4f4"
 
 
 def mask_password(password: str) -> str:
@@ -115,9 +119,9 @@ class PasswordBookDialog(tk.Toplevel):
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", padx=14, pady=(8, 14))
-        ttk.Button(buttons, text="新增密码", command=self.add_password).pack(side="left")
-        ttk.Button(buttons, text="删除勾选", command=self.delete_checked).pack(side="left", padx=8)
-        ttk.Button(buttons, text="关闭", command=self.destroy).pack(side="right")
+        ttk.Button(buttons, text="新增密码", command=self.add_password, style="Green.TButton").pack(side="left")
+        ttk.Button(buttons, text="删除勾选", command=self.delete_checked, style="Danger.TButton").pack(side="left", padx=8)
+        ttk.Button(buttons, text="关闭", command=self.destroy, style="Small.TButton").pack(side="right")
         self.refresh()
 
     def refresh(self) -> None:
@@ -159,22 +163,30 @@ class PasswordBookDialog(tk.Toplevel):
         self.refresh()
 
 
-class BaseToolFrame(ttk.Frame):
-    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
-        super().__init__(parent, style="Surface.TFrame")
-        self.app = app
-        self.state = state
-        self.description = description
-        self.description_status_var = tk.StringVar(value="可直接编辑说明，离开文本框会自动保存。")
-        desc_card = ttk.Frame(self, style="Card.TFrame", padding=(18, 16))
-        desc_card.pack(fill="x", padx=22, pady=(22, 12))
-        desc_header = ttk.Frame(desc_card, style="Card.TFrame")
-        desc_header.pack(fill="x", pady=(0, 8))
-        ttk.Label(desc_header, text="工具说明", style="DescriptionTitle.TLabel").pack(side="left")
-        ttk.Button(desc_header, text="恢复默认说明", command=self.reset_description).pack(side="right")
-        self.description_text = tk.Text(
-            desc_card,
-            height=4,
+class DescriptionEditDialog(tk.Toplevel):
+    """小型说明编辑弹窗，主界面只保留一两行展示和编辑入口。"""
+
+    def __init__(self, tool_frame: "BaseToolFrame") -> None:
+        super().__init__(tool_frame.app.root)
+        self.tool_frame = tool_frame
+        self.title("编辑工具说明")
+        self.geometry("560x320")
+        self.configure(bg=COLOR_BG)
+        self.transient(tool_frame.app.root)
+        self.grab_set()
+
+        shell = ttk.Frame(self, style="Surface.TFrame", padding=(16, 14))
+        shell.pack(fill="both", expand=True)
+        ttk.Label(
+            shell,
+            text="说明只会在工具顶部简洁展示；这里可随时修改或恢复默认。",
+            style="Muted.TLabel",
+            wraplength=500,
+        ).pack(anchor="w", pady=(0, 10))
+
+        self.text = tk.Text(
+            shell,
+            height=7,
             wrap="word",
             bg=COLOR_SURFACE,
             fg=COLOR_TEXT,
@@ -188,31 +200,74 @@ class BaseToolFrame(ttk.Frame):
             padx=10,
             pady=8,
         )
-        self.description_text.pack(fill="x")
-        self.description_text.insert("1.0", description)
-        self.description_text.bind("<FocusOut>", lambda _e: self.save_description())
-        self.description_text.bind("<Control-s>", self._save_description_shortcut)
+        self.text.pack(fill="both", expand=True)
+        self.text.insert("1.0", tool_frame.description)
+        self.text.focus_set()
+
+        buttons = ttk.Frame(shell, style="Surface.TFrame")
+        buttons.pack(fill="x", pady=(12, 0))
+        ttk.Button(buttons, text="恢复默认", command=self.restore_default, style="Small.TButton").pack(side="left")
+        ttk.Button(buttons, text="取消", command=self.destroy, style="Small.TButton").pack(side="right")
+        ttk.Button(buttons, text="保存", command=self.save, style="Green.TButton").pack(side="right", padx=(0, 8))
+        self.bind("<Control-s>", lambda _e: self.save())
+
+    def restore_default(self) -> None:
+        tool_key = self.tool_frame.app.current_tool_key
+        if not tool_key:
+            return
+        default_description = self.tool_frame.app.tools[tool_key].description
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", default_description)
+
+    def save(self) -> None:
+        self.tool_frame.update_description(self.text.get("1.0", "end-1c").strip())
+        self.destroy()
+
+
+class BaseToolFrame(ttk.Frame):
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, style="Surface.TFrame")
+        self.app = app
+        self.state = state
+        self.description = description
+        self.description_var = tk.StringVar(value=description)
+
+        desc_row = ttk.Frame(self, style="Surface.TFrame")
+        desc_row.pack(fill="x", padx=22, pady=(18, 6))
+        ttk.Label(desc_row, text="说明：", style="Muted.TLabel").pack(side="left", anchor="n", pady=(3, 0))
         ttk.Label(
-            desc_card,
-            textvariable=self.description_status_var,
-            style="DescriptionHint.TLabel",
-        ).pack(anchor="w", pady=(8, 0))
+            desc_row,
+            textvariable=self.description_var,
+            style="InlineDescription.TLabel",
+            wraplength=780,
+            justify="left",
+        ).pack(side="left", fill="x", expand=True, padx=(2, 10))
+        ttk.Button(desc_row, text="编辑", command=self.open_description_editor, style="Small.TButton").pack(side="right")
 
     def _description_value(self) -> str:
-        return self.description_text.get("1.0", "end-1c").strip()
+        return self.description_var.get().strip()
 
     def _save_description_shortcut(self, _event: tk.Event) -> str:
         self.save_description()
         return "break"
 
-    def reset_description(self) -> None:
+    def open_description_editor(self) -> None:
+        DescriptionEditDialog(self)
+
+    def update_description(self, description: str) -> None:
         tool_key = self.app.current_tool_key
         if not tool_key:
             return
         default_description = self.app.tools[tool_key].description
-        self.description_text.delete("1.0", "end")
-        self.description_text.insert("1.0", default_description)
+        self.description = description or default_description
+        self.description_var.set(self.description)
         self.save_description()
+
+    def reset_description(self) -> None:
+        tool_key = self.app.current_tool_key
+        if not tool_key:
+            return
+        self.update_description(self.app.tools[tool_key].description)
 
     def save_description(self) -> None:
         tool_key = self.app.current_tool_key
@@ -226,8 +281,8 @@ class BaseToolFrame(ttk.Frame):
         else:
             descriptions.pop(tool_key, None)
         self.description = description or default_description
+        self.description_var.set(self.description)
         self.app.config.save()
-        self.description_status_var.set("说明已保存。")
 
     def save_state(self) -> None:
         raise NotImplementedError
@@ -257,7 +312,7 @@ class PostDedupTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         ttk.Button(actions, text="开始去重", command=self.run, style="Primary.TButton").pack(side="left")
-        ttk.Button(actions, text="保存当前填写", command=self.save_state).pack(side="left", padx=10)
+        ttk.Button(actions, text="保存当前填写", command=self.save_state, style="Small.TButton").pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(14, 12))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
@@ -416,7 +471,7 @@ class ToolListDialog(tk.Toplevel):
         title_group.pack(side="left", fill="x", expand=True)
         ttk.Label(title_group, text="工具列表", style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(title_group, text="按分类管理工具，拖动工具可移动分类", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
-        ttk.Button(header, text="＋ 新增分类", command=app.add_category, style="Primary.TButton").pack(side="right")
+        ttk.Button(header, text="＋ 新增分类", command=app.add_category, style="Green.TButton").pack(side="right")
 
         list_card = ttk.Frame(shell, style="Card.TFrame", padding=(12, 12))
         list_card.pack(fill="both", expand=True)
@@ -432,7 +487,7 @@ class ToolListDialog(tk.Toplevel):
 
         footer = ttk.Frame(shell, style="Surface.TFrame")
         footer.pack(fill="x", pady=(14, 0))
-        ttk.Button(footer, text="关闭", command=self.close).pack(side="right")
+        ttk.Button(footer, text="关闭", command=self.close, style="Small.TButton").pack(side="right")
 
     def close(self) -> None:
         self.app.tool_list_dialog = None
@@ -512,23 +567,36 @@ class ToolboxApp:
         style.configure("Card.TFrame", background=COLOR_SURFACE, relief="flat")
         style.configure("Info.TFrame", background=COLOR_ACCENT, relief="flat")
         style.configure("TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
-        style.configure("HeroTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 19, "bold"))
+        style.configure("HeroTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 18, "bold"))
         style.configure("HeroSubtitle.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 10))
         style.configure("SectionTitle.TLabel", background=COLOR_BG, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 13, "bold"))
         style.configure("Muted.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
-        style.configure("Description.TLabel", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 10))
-        style.configure(
-            "DescriptionTitle.TLabel",
-            background=COLOR_SURFACE,
-            foreground=COLOR_TEXT,
-            font=("Microsoft YaHei UI", 11, "bold"),
-        )
-        style.configure("DescriptionHint.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
+        style.configure("CardMuted.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 9))
+        style.configure("InlineDescription.TLabel", background=COLOR_BG, foreground=COLOR_MUTED, font=("Microsoft YaHei UI", 10))
         style.configure("Info.TLabel", background=COLOR_ACCENT, foreground=COLOR_PRIMARY_DARK, font=("Microsoft YaHei UI", 10))
-        style.configure("TButton", font=("Microsoft YaHei UI", 10), padding=(12, 7), borderwidth=0)
-        style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff")
+        style.configure(
+            "TButton",
+            font=("Microsoft YaHei UI", 10, "bold"),
+            padding=(12, 7),
+            borderwidth=1,
+            relief="flat",
+            background=COLOR_TOOL_UNSELECTED,
+            foreground=COLOR_MUTED,
+        )
+        style.map("TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
+        style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", bordercolor=COLOR_PRIMARY_DARK)
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
-        style.configure("TEntry", fieldbackground="#ffffff", padding=(8, 6))
+        style.configure("Green.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(12, 5), bordercolor=COLOR_PRIMARY_DARK)
+        style.map("Green.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
+        style.configure("Small.TButton", background=COLOR_TOOL_UNSELECTED, foreground=COLOR_MUTED, padding=(10, 5), bordercolor=COLOR_BORDER)
+        style.map("Small.TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
+        style.configure("Danger.TButton", background=COLOR_DANGER, foreground="#ffffff", padding=(10, 5), bordercolor=COLOR_DANGER_DARK)
+        style.map("Danger.TButton", background=[("active", COLOR_DANGER_DARK), ("pressed", COLOR_DANGER_DARK)])
+        style.configure("Tool.TButton", background=COLOR_TOOL_UNSELECTED, foreground=COLOR_MUTED, padding=(18, 8), bordercolor=COLOR_BORDER)
+        style.map("Tool.TButton", background=[("active", "#ececec"), ("pressed", "#e3e3e3")])
+        style.configure("SelectedTool.TButton", background=COLOR_TOOL_SELECTED, foreground="#ffffff", padding=(18, 8), bordercolor="#4a4a4a")
+        style.map("SelectedTool.TButton", background=[("active", "#3a3a3a"), ("pressed", "#2d2d2d")])
+        style.configure("TEntry", fieldbackground="#ffffff", padding=(8, 6), bordercolor=COLOR_BORDER)
         style.configure("TLabelframe", background=COLOR_BG, bordercolor=COLOR_BORDER, relief="solid")
         style.configure("Card.TLabelframe", background=COLOR_SURFACE, bordercolor=COLOR_BORDER, relief="solid")
         style.configure("Card.TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 11, "bold"))
@@ -553,7 +621,7 @@ class ToolboxApp:
             command=self.open_tool_list,
             style="Primary.TButton",
         ).pack(side="left", padx=(0, 10))
-        ttk.Button(actions, text="密码本", command=self.open_password_book).pack(side="left")
+        ttk.Button(actions, text="密码本", command=self.open_password_book, style="Small.TButton").pack(side="left")
 
         body = ttk.Frame(self.root, style="Surface.TFrame", padding=(24, 0, 24, 24))
         body.pack(fill="both", expand=True)
@@ -614,8 +682,8 @@ class ToolboxApp:
                 foreground=COLOR_TEXT,
                 font=("Microsoft YaHei UI", 10, "bold"),
             ).pack(side="left")
-            ttk.Button(header, text="改名", command=lambda c=category: self.rename_category(c)).pack(side="right")
-            ttk.Button(header, text="删除", command=lambda c=category: self.delete_category(c)).pack(side="right", padx=6)
+            ttk.Button(header, text="改名", command=lambda c=category: self.rename_category(c), style="Small.TButton").pack(side="right")
+            ttk.Button(header, text="删除", command=lambda c=category: self.delete_category(c), style="Danger.TButton").pack(side="right", padx=6)
 
             body = ttk.Frame(inner, style="Card.TFrame")
             body.pack(fill="x")
@@ -628,7 +696,8 @@ class ToolboxApp:
             body = self.category_body_frames.get(category)
             if body is None:
                 continue
-            btn = ttk.Button(body, text=f"  {tool.name}", command=lambda k=key: self.open_tool(k))
+            style_name = "SelectedTool.TButton" if key == self.current_tool_key else "Tool.TButton"
+            btn = ttk.Button(body, text=f"  {tool.name}", command=lambda k=key: self.open_tool(k), style=style_name)
             btn.pack(fill="x", pady=4)
             btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k))
             btn.bind("<ButtonRelease-1>", self.finish_drag)
@@ -718,6 +787,7 @@ class ToolboxApp:
         state = self.config.get_tool_state(key)
         self.current_tool_frame = tool.factory(self.content, self, state)
         self.current_tool_frame.pack(fill="both", expand=True)
+        self.refresh_tool_list()
 
     def on_close(self) -> None:
         if self.current_tool_frame is not None:
