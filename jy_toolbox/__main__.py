@@ -1,6 +1,6 @@
 """Package entry point for ``python -m jy_toolbox``."""
 
-from jy_toolbox.main import main
+from main import main
 
 
 if __name__ == "__main__":
