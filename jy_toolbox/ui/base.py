@@ -102,6 +102,26 @@ class BaseToolFrame(ttk.Frame):
         ttk.Label(parent, text=hint).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         return combo
 
+    def _widget_exists(self, widget: tk.Widget) -> bool:
+        """安全判断 Tk 控件是否仍然存在。
+
+        后台线程完成后，用户可能已经切换工具或关闭窗口；此时 Tk 已经销毁了
+        原来的 Combobox，再访问它会抛出 ``TclError: invalid command name``。
+        """
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def _schedule_on_ui_thread(self, callback: Callable[[], None]) -> None:
+        """尽量把回调派发到 UI 线程；窗口已销毁时直接忽略。"""
+        if not self._widget_exists(self):
+            return
+        try:
+            self.after(0, callback)
+        except tk.TclError:
+            return
+
     def populate_sheets_async(
         self,
         excel_path: str,
@@ -111,6 +131,8 @@ class BaseToolFrame(ttk.Frame):
         show_errors: bool = True,
     ) -> None:
         """在后台识别 Excel sheet，避免大文件在选择文件或切换工具时卡住界面。"""
+        if not self._widget_exists(combo):
+            return
         if not excel_path:
             combo["values"] = ()
             return
@@ -133,9 +155,13 @@ class BaseToolFrame(ttk.Frame):
                     self.app.config.data.get("passwords", []),
                 )
             except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
-                self.after(0, lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, show_errors))
+                self._schedule_on_ui_thread(
+                    lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, show_errors)
+                )
             else:
-                self.after(0, lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var))
+                self._schedule_on_ui_thread(
+                    lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var)
+                )
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -178,6 +204,9 @@ class BaseToolFrame(ttk.Frame):
         if seq != self._sheet_loading_seq.get(combo_key):
             return
         self._sheet_loading_pending.pop(combo_key, None)
+        if not self._widget_exists(combo):
+            self._update_sheet_loading_status()
+            return
         combo["values"] = sheet_names
         if sheet_names and var.get().strip() not in sheet_names:
             var.set(sheet_names[0])
@@ -189,6 +218,8 @@ class BaseToolFrame(ttk.Frame):
         if seq != self._sheet_loading_seq.get(combo_key):
             return
         self._sheet_loading_pending.pop(combo_key, None)
+        if not self._widget_exists(self):
+            return
         self._update_sheet_loading_status()
         message = str(exc)
         if not message.startswith("读取工作表失败"):
