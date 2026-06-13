@@ -8,8 +8,8 @@ JY2026年6月份临时需求工具。
 
 ```bash
 pip install -r requirements.txt
-python -m jy_toolbox
-# 旧入口仍兼容：python toolbox_app.py
+python main.py
+# 仍支持包方式启动：python -m jy_toolbox
 ```
 
 
@@ -18,14 +18,14 @@ python -m jy_toolbox
 项目已拆分为标准 Python 包，避免把界面、业务逻辑和配置全部堆在单个文件中：
 
 ```text
+main.py                    # 应用启动入口
 jy_toolbox/
-├── main.py                 # 应用启动入口
 ├── core/                   # 常量、配置、本地平台适配、通用模型
 ├── services/               # Excel 读取、统计、去重等纯业务函数
 └── ui/                     # Tkinter 主界面、弹窗、控件和各工具页面
 ```
 
-根目录 `toolbox_app.py` 仅保留为兼容旧启动命令的轻量入口。
+根目录 `main.py` 是唯一的应用启动入口；`python -m jy_toolbox` 仅通过包入口转发到它。
 
 ### 已包含功能
 
