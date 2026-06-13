@@ -8,6 +8,7 @@ from tkinter import messagebox, ttk
 
 from jy_toolbox.core.constants import *
 from jy_toolbox.services.excel_io import list_excel_sheet_names_with_passwords
+from jy_toolbox.ui.dialogs import DescriptionEditDialog
 from jy_toolbox.ui.widgets import make_rounded_button
 
 class BaseToolFrame(ttk.Frame):
@@ -19,6 +20,8 @@ class BaseToolFrame(ttk.Frame):
         self.description_var = tk.StringVar(value=description)
         self._background_running = False
         self._sheet_loading_seq: dict[int, int] = {}
+        self._sheet_loading_pending: dict[int, str] = {}
+        self._sheet_status_before_loading = ""
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar: ttk.Progressbar | None = None
 
@@ -115,11 +118,13 @@ class BaseToolFrame(ttk.Frame):
         combo_key = id(combo)
         seq = self._sheet_loading_seq.get(combo_key, 0) + 1
         self._sheet_loading_seq[combo_key] = seq
-        old_status = self.status_var.get() if hasattr(self, "status_var") else ""
         combo["values"] = ()
         var.set(var.get().strip())
         if hasattr(self, "status_var"):
-            self.status_var.set(f"正在后台识别工作表：{Path(excel_path).name}……")
+            if not self._sheet_loading_pending:
+                self._sheet_status_before_loading = self.status_var.get()
+            self._sheet_loading_pending[combo_key] = Path(excel_path).name
+            self._update_sheet_loading_status()
 
         def worker() -> None:
             try:
@@ -128,9 +133,9 @@ class BaseToolFrame(ttk.Frame):
                     self.app.config.data.get("passwords", []),
                 )
             except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
-                self.after(0, lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, old_status, show_errors))
+                self.after(0, lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, show_errors))
             else:
-                self.after(0, lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var, old_status))
+                self.after(0, lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -149,6 +154,19 @@ class BaseToolFrame(ttk.Frame):
                 sheet_var = getattr(self, sheet_attr)
                 self.populate_sheets_async(path_var.get().strip(), combo, sheet_var, show_errors=show_errors)
 
+    def _update_sheet_loading_status(self) -> None:
+        """显示当前仍在识别的 Excel，避免多个 sheet 任务互相恢复旧状态。"""
+        if not hasattr(self, "status_var"):
+            return
+        pending_names = list(self._sheet_loading_pending.values())
+        if not pending_names:
+            self.status_var.set(self._sheet_status_before_loading or "工作表识别完成。")
+            self._sheet_status_before_loading = ""
+            return
+        current_name = pending_names[-1]
+        suffix = f"（剩余 {len(pending_names)} 个文件）" if len(pending_names) > 1 else ""
+        self.status_var.set(f"正在后台识别工作表：{current_name}……{suffix}")
+
     def _finish_sheet_loading_success(
         self,
         combo_key: int,
@@ -156,23 +174,22 @@ class BaseToolFrame(ttk.Frame):
         sheet_names: list[str],
         combo: ttk.Combobox,
         var: tk.StringVar,
-        old_status: str,
     ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
             return
+        self._sheet_loading_pending.pop(combo_key, None)
         combo["values"] = sheet_names
         if sheet_names and var.get().strip() not in sheet_names:
             var.set(sheet_names[0])
-        if hasattr(self, "status_var"):
-            self.status_var.set(old_status or "工作表识别完成。")
+        self._update_sheet_loading_status()
 
     def _finish_sheet_loading_error(
-        self, combo_key: int, seq: int, exc: Exception, old_status: str, show_errors: bool
+        self, combo_key: int, seq: int, exc: Exception, show_errors: bool
     ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
             return
-        if hasattr(self, "status_var"):
-            self.status_var.set(old_status or "工作表识别失败。")
+        self._sheet_loading_pending.pop(combo_key, None)
+        self._update_sheet_loading_status()
         message = str(exc)
         if not message.startswith("读取工作表失败"):
             message = f"读取工作表失败：{message}"
