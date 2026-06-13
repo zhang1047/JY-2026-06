@@ -420,3 +420,100 @@ def calculate_source_media_camp_ratios_excel(
         "matched_share_posts": matched_share_posts,
         "classified_accounts": classified_accounts,
     }
+
+
+def calculate_post_theme_ratios_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    dictionary_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    dictionary_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+    if not dictionary_input_path.exists():
+        raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(25, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+    if progress is not None:
+        progress(40, "正在后台读取内容偏好字典 Excel……")
+    dictionary_df = read_excel_with_passwords(dictionary_input_path, passwords, dictionary_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError('账号 Excel 缺少必要列：FB主页')
+    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖子正文":
+        raise ValueError("字典 Excel 第一列必须是：帖子正文")
+    if "内容偏好" not in dictionary_df.columns:
+        raise ValueError("字典 Excel 缺少必要列：内容偏好")
+
+    if progress is not None:
+        progress(55, "正在按帖子正文匹配内容偏好分类……")
+    dictionary_work = dictionary_df.copy()
+    dictionary_work["__body_key__"] = dictionary_work["帖子正文"].map(_normalized_key)
+    dictionary_work["__theme__"] = dictionary_work["内容偏好"].map(_normalized_key)
+    dictionary_work = dictionary_work[
+        (dictionary_work["__body_key__"] != "") & (dictionary_work["__theme__"] != "")
+    ].drop_duplicates(subset=["__body_key__"], keep="first")
+    theme_by_body = dictionary_work.set_index("__body_key__")["__theme__"].to_dict()
+    theme_names = list(dict.fromkeys(str(value) for value in dictionary_work["__theme__"]))
+    output_columns = [f"主题占比-{theme}" for theme in theme_names]
+
+    post_work = post_df.copy()
+    post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
+    post_work["__body_key__"] = post_work["帖子正文"].map(_normalized_key)
+    post_work["__theme__"] = post_work["__body_key__"].map(theme_by_body)
+    matched_work = post_work[
+        (post_work["__homepage_key__"] != "") & post_work["__theme__"].map(_is_non_empty_cell)
+    ].copy()
+
+    if progress is not None:
+        progress(72, "正在按账号汇总帖子主题占比……")
+    ratios_by_homepage: dict[str, dict[str, str]] = {}
+    for homepage, homepage_rows in matched_work.groupby("__homepage_key__", sort=False):
+        counts = {str(name): int(count) for name, count in homepage_rows["__theme__"].value_counts(sort=False).items()}
+        total = sum(counts.values())
+        ratios_by_homepage[str(homepage)] = {
+            f"主题占比-{theme}": _format_single_percentage(counts.get(theme, 0), total)
+            for theme in theme_names
+        }
+
+    if progress is not None:
+        progress(84, "正在写回账号表帖子主题占比列……")
+    output_df = account_df.copy()
+    existing_theme_columns = [column for column in output_df.columns if str(column).startswith("主题占比-")]
+    if existing_theme_columns:
+        output_df = output_df.drop(columns=existing_theme_columns)
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for column in output_columns:
+        output_df[column] = account_keys.map(lambda key, column=column: ratios_by_homepage.get(key, {}).get(column, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    themed_accounts = int(
+        output_df[output_columns].apply(lambda row: any(_is_non_empty_cell(value) for value in row), axis=1).sum()
+    ) if output_columns else 0
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "dictionary_rows": len(dictionary_df),
+        "themes": len(theme_names),
+        "matched_posts": len(matched_work),
+        "themed_accounts": themed_accounts,
+    }

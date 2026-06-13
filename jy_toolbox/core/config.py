@@ -15,6 +15,7 @@ class ConfigStore:
             "passwords": [],
             "categories": [],
             "tool_categories": {},
+            "tool_orders": {},
             "tool_states": {},
             "tool_descriptions": {},
         }

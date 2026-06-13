@@ -14,6 +14,7 @@ from jy_toolbox.ui.tools import (
     AveragePostLengthTool,
     PostDedupTool,
     PostTypeRatioTool,
+    PostThemeRatioTool,
     SourceMediaCampRatioTool,
 )
 from jy_toolbox.ui.base import BaseToolFrame
@@ -68,6 +69,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="post_theme_ratio",
+                name="帖子主题占比（%）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel、贴文 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
+                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“内容偏好”分类，"
+                    "按账号计算各内容偏好分类占比，并在账号表最后新增“主题占比-分类名”列。"
+                ),
+                factory=lambda parent, app, state: PostThemeRatioTool(
+                    parent, app, state, app.get_tool_description("post_theme_ratio")
                 ),
             )
         )
@@ -138,6 +154,7 @@ class ToolboxApp:
                 if tool.default_category not in categories:
                     categories.append(tool.default_category)
                 tool_categories[key] = tool.default_category
+        self._normalize_tool_orders()
         self.config.save()
 
     def _configure_styles(self) -> None:
@@ -294,6 +311,37 @@ class ToolboxApp:
         self.tool_list_dialog = ToolListDialog(self)
         self.refresh_tool_list()
 
+
+    def _normalize_tool_orders(self) -> None:
+        categories = self.config.data.setdefault("categories", [])
+        tool_categories = self.config.data.setdefault("tool_categories", {})
+        orders = self.config.data.setdefault("tool_orders", {})
+        for category in categories:
+            existing_order = [key for key in orders.get(category, []) if key in self.tools and tool_categories.get(key) == category]
+            missing_keys = [key for key, tool in self.tools.items() if tool_categories.get(key, tool.default_category) == category and key not in existing_order]
+            orders[category] = existing_order + missing_keys
+        for category in list(orders):
+            if category not in categories:
+                orders.pop(category, None)
+
+    def tools_in_category(self, category: str) -> list[str]:
+        self._normalize_tool_orders()
+        return list(self.config.data.setdefault("tool_orders", {}).get(category, []))
+
+    def move_tool_order(self, tool_key: str, direction: int) -> None:
+        category = self.config.data.setdefault("tool_categories", {}).get(tool_key, self.tools[tool_key].default_category)
+        order = self.tools_in_category(category)
+        if tool_key not in order:
+            return
+        index = order.index(tool_key)
+        new_index = index + direction
+        if new_index < 0 or new_index >= len(order):
+            return
+        order[index], order[new_index] = order[new_index], order[index]
+        self.config.data.setdefault("tool_orders", {})[category] = order
+        self.config.save()
+        self.refresh_tool_list()
+
     def refresh_tool_list(self) -> None:
         if self.tool_list_dialog is None or not self.tool_list_dialog.winfo_exists():
             return
@@ -354,22 +402,31 @@ class ToolboxApp:
             self.category_drop_widgets[category].add(body)
             body.bind("<ButtonRelease-1>", lambda _e, c=category: self.drop_tool_to_category(c))
 
-        for key, tool in self.tools.items():
-            category = self.config.data.setdefault("tool_categories", {}).get(key, tool.default_category)
+        self._normalize_tool_orders()
+        for category in categories:
             body = self.category_body_frames.get(category)
             if body is None:
                 continue
-            role = "selected" if key == self.current_tool_key else "normal"
-            btn = make_rounded_button(
-                body,
-                tool.name,
-                lambda k=key: self.open_tool(k),
-                role=role,
-                height=26,
-            )
-            btn.pack(fill="x", pady=4)
-            btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k), add="+")
-            btn.bind("<ButtonRelease-1>", self.finish_drag, add="+")
+            order = self.tools_in_category(category)
+            for index, key in enumerate(order):
+                tool = self.tools.get(key)
+                if tool is None:
+                    continue
+                row = ttk.Frame(body, style="Card.TFrame")
+                row.pack(fill="x", pady=4)
+                role = "selected" if key == self.current_tool_key else "normal"
+                btn = make_rounded_button(row, tool.name, lambda k=key: self.open_tool(k), role=role, height=26)
+                btn.pack(side="left", fill="x", expand=True)
+                btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k), add="+")
+                btn.bind("<ButtonRelease-1>", self.finish_drag, add="+")
+                up = make_rounded_button(row, "↑", lambda k=key: self.move_tool_order(k, -1), width=28, height=24)
+                up.pack(side="left", padx=(6, 2))
+                down = make_rounded_button(row, "↓", lambda k=key: self.move_tool_order(k, 1), width=28, height=24)
+                down.pack(side="left")
+                if index == 0:
+                    up.configure(state="disabled")
+                if index == len(order) - 1:
+                    down.configure(state="disabled")
 
     def start_drag(self, tool_key: str) -> None:
         self.drag_data = {"tool_key": tool_key}
@@ -395,7 +452,14 @@ class ToolboxApp:
             self.drag_data = {}
 
     def move_tool(self, tool_key: str, category: str) -> None:
-        self.config.data.setdefault("tool_categories", {})[tool_key] = category
+        tool_categories = self.config.data.setdefault("tool_categories", {})
+        old_category = tool_categories.get(tool_key, self.tools[tool_key].default_category)
+        tool_categories[tool_key] = category
+        orders = self.config.data.setdefault("tool_orders", {})
+        for order_category in {old_category, category}:
+            orders[order_category] = [key for key in orders.get(order_category, []) if key != tool_key]
+        orders.setdefault(category, []).append(tool_key)
+        self._normalize_tool_orders()
         self.config.save()
         self.refresh_tool_list()
 
@@ -422,6 +486,9 @@ class ToolboxApp:
             messagebox.showwarning("提示", "分类名称不能为空或重复。", parent=self.root)
             return
         self.config.data["categories"] = [new_name if c == old_name else c for c in categories]
+        orders = self.config.data.setdefault("tool_orders", {})
+        if old_name in orders:
+            orders[new_name] = orders.pop(old_name)
         for key, category in list(self.config.data.setdefault("tool_categories", {}).items()):
             if category == old_name:
                 self.config.data["tool_categories"][key] = new_name
@@ -437,9 +504,13 @@ class ToolboxApp:
         if not messagebox.askyesno("删除分类", f"确认删除分类“{category}”？其中工具将移动到“{target}”。", parent=self.root):
             return
         self.config.data["categories"] = [c for c in categories if c != category]
+        orders = self.config.data.setdefault("tool_orders", {})
+        moved_order = orders.pop(category, [])
+        orders.setdefault(target, []).extend([key for key in moved_order if key not in orders.get(target, [])])
         for key, assigned in list(self.config.data.setdefault("tool_categories", {}).items()):
             if assigned == category:
                 self.config.data["tool_categories"][key] = target
+        self._normalize_tool_orders()
         self.config.save()
         self.refresh_tool_list()
 
