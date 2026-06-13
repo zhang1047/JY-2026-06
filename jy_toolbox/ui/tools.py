@@ -11,9 +11,11 @@ from jy_toolbox.services.analytics import (
     calculate_average_post_length_excel,
     calculate_post_type_ratios_excel,
     calculate_post_theme_ratios_excel,
+    calculate_sentiment_expression_excel,
     calculate_source_media_camp_ratios_excel,
     deduplicate_posts_excel,
 )
+from jy_toolbox.services.excel_io import list_excel_sheet_names_with_passwords
 from jy_toolbox.ui.base import BaseToolFrame
 from jy_toolbox.ui.widgets import make_rounded_button
 
@@ -847,3 +849,137 @@ class PostThemeRatioTool(BaseToolFrame):
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
         self.run_in_background(task, on_success, start_message="已开始后台统计帖子主题占比……")
+
+
+class SentimentExpressionTool(BaseToolFrame):
+    ACCOUNT_URL_COLUMN = "FB主页"
+    POST_URL_COLUMN = "主页url"
+    BODY_COLUMN = "帖子正文"
+    SENTIMENT_COLUMN = "情感表达倾向"
+    OUTPUT_COLUMNS = (
+        "情感表达-分数",
+        "情感表达-正面（数量）",
+        "情感表达-正面（占比）",
+        "情感表达-负面（数量）",
+        "情感表达-负面（占比）",
+        "情感表达-中性（数量）",
+        "情感表达-中性（占比）",
+    )
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, app, state, description)
+        self.account_input_var = tk.StringVar(value=state.get("account_input_path", ""))
+        self.post_input_var = tk.StringVar(value=state.get("post_input_path", ""))
+        self.dictionary_input_var = tk.StringVar(value=state.get("dictionary_input_path", ""))
+        self.output_var = tk.StringVar(value=state.get("output_path", ""))
+        self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
+        self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
+        self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
+        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和情感表达字典 Excel 后开始统计。")
+        self._build_form()
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text="情感表达分数&数量占比", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
+        self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
+        self.account_sheet_combo = self._sheet_row(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self._sheet_row(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self._sheet_row(form, 6, "字典表工作表：", self.dictionary_sheet_var)
+        form.columnconfigure(1, weight=1)
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
+        self._load_initial_sheets()
+
+    def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+
+    def _sheet_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar) -> ttk.Combobox:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        combo = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
+        combo.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(parent, text="导入 Excel 后自动识别 sheet，下拉选择").grid(row=row, column=2, sticky="w", padx=10, pady=8)
+        return combo
+
+    def _populate_sheets(self, excel_path: str, combo: ttk.Combobox, var: tk.StringVar) -> None:
+        if not excel_path:
+            return
+        try:
+            sheet_names = list_excel_sheet_names_with_passwords(Path(excel_path), self.app.config.data.get("passwords", []))
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showwarning("提示", f"读取工作表失败：{exc}", parent=self)
+            return
+        combo["values"] = sheet_names
+        if sheet_names and var.get().strip() not in sheet_names:
+            var.set(sheet_names[0])
+
+    def _load_initial_sheets(self) -> None:
+        self._populate_sheets(self.account_input_var.get().strip(), self.account_sheet_combo, self.account_sheet_var)
+        self._populate_sheets(self.post_input_var.get().strip(), self.post_sheet_combo, self.post_sheet_var)
+        self._populate_sheets(self.dictionary_input_var.get().strip(), self.dictionary_sheet_combo, self.dictionary_sheet_var)
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择账号 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if not path:
+            return
+        self.account_input_var.set(path)
+        if not self.output_var.get().strip():
+            p = Path(path); self.output_var.set(str(p.with_name(f"{p.stem}_情感表达统计.xlsx")))
+        self._populate_sheets(path, self.account_sheet_combo, self.account_sheet_var)
+        self.save_state()
+
+    def choose_post_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.post_input_var.set(path); self._populate_sheets(path, self.post_sheet_combo, self.post_sheet_var); self.save_state()
+
+    def choose_dictionary_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择情感表达字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.dictionary_input_var.set(path); self._populate_sheets(path, self.dictionary_sheet_combo, self.dictionary_sheet_var); self.save_state()
+
+    def choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(title="保存账号表处理结果", defaultextension=".xlsx", filetypes=[("Excel 文件", "*.xlsx")])
+        if path:
+            self.output_var.set(path); self.save_state()
+
+    def save_state(self) -> None:
+        self.app.config.set_tool_state("sentiment_expression", {
+            "account_input_path": self.account_input_var.get().strip(),
+            "post_input_path": self.post_input_var.get().strip(),
+            "dictionary_input_path": self.dictionary_input_var.get().strip(),
+            "output_path": self.output_var.get().strip(),
+            "account_sheet_name": self.account_sheet_var.get().strip(),
+            "post_sheet_name": self.post_sheet_var.get().strip(),
+            "dictionary_sheet_name": self.dictionary_sheet_var.get().strip(),
+        })
+        self.status_var.set("当前工具填写内容已保存。")
+
+    def run(self) -> None:
+        account_input_path = self.account_input_var.get().strip(); post_input_path = self.post_input_var.get().strip(); dictionary_input_path = self.dictionary_input_var.get().strip(); output_path = self.output_var.get().strip()
+        account_sheet_name = self.account_sheet_var.get().strip() or 0; post_sheet_name = self.post_sheet_var.get().strip() or 0; dictionary_sheet_name = self.dictionary_sheet_var.get().strip() or 0
+        if not account_input_path:
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
+        if not post_input_path:
+            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+        if not dictionary_input_path:
+            messagebox.showwarning("提示", "请选择情感表达字典 Excel。", parent=self); return
+        if not output_path:
+            messagebox.showwarning("提示", "请选择输出 Excel。", parent=self); return
+        self.save_state()
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            return calculate_sentiment_expression_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典 {dictionary_rows} 行，匹配贴文 {matched_posts} 行，已写入 {sentiment_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+        self.run_in_background(task, on_success, start_message="已开始后台统计情感表达分数和数量占比……")

@@ -15,6 +15,7 @@ from jy_toolbox.ui.tools import (
     PostDedupTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
+    SentimentExpressionTool,
     SourceMediaCampRatioTool,
 )
 from jy_toolbox.ui.base import BaseToolFrame
@@ -84,6 +85,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostThemeRatioTool(
                     parent, app, state, app.get_tool_description("post_theme_ratio")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="sentiment_expression",
+                name="情感表达分数&数量占比",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel、贴文 Excel 和情感表达字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
+                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“情感表达倾向”枚举，"
+                    "按账号计算情感表达分数（正面 +1、负面 -1、中性 0）以及正面、负面、中性的数量和占比。"
+                ),
+                factory=lambda parent, app, state: SentimentExpressionTool(
+                    parent, app, state, app.get_tool_description("sentiment_expression")
                 ),
             )
         )
