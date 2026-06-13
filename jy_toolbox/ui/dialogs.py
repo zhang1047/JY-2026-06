@@ -180,11 +180,40 @@ class ToolListDialog(tk.Toplevel):
         self.canvas.configure(yscrollcommand=scrollbar.set)
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        self._bind_mousewheel_scrolling()
 
         footer = ttk.Frame(shell, style="Surface.TFrame")
         footer.pack(fill="x", pady=(14, 0))
         make_rounded_button(footer, "关闭", self.close, width=62).pack(side="right")
 
+    def _bind_mousewheel_scrolling(self) -> None:
+        def on_mousewheel(event: tk.Event) -> str:
+            if event.num == 4:
+                delta = -1
+            elif event.num == 5:
+                delta = 1
+            else:
+                delta = -int(event.delta / 120) if event.delta else 0
+            if delta:
+                self.canvas.yview_scroll(delta, "units")
+            return "break"
+
+        def bind_events(_event: tk.Event) -> None:
+            self.canvas.bind_all("<MouseWheel>", on_mousewheel)
+            self.canvas.bind_all("<Button-4>", on_mousewheel)
+            self.canvas.bind_all("<Button-5>", on_mousewheel)
+
+        def unbind_events(_event: tk.Event) -> None:
+            self.canvas.unbind_all("<MouseWheel>")
+            self.canvas.unbind_all("<Button-4>")
+            self.canvas.unbind_all("<Button-5>")
+
+        self.canvas.bind("<Enter>", bind_events)
+        self.canvas.bind("<Leave>", unbind_events)
+
     def close(self) -> None:
+        self.canvas.unbind_all("<MouseWheel>")
+        self.canvas.unbind_all("<Button-4>")
+        self.canvas.unbind_all("<Button-5>")
         self.app.tool_list_dialog = None
         self.destroy()

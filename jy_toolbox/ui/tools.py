@@ -976,7 +976,7 @@ class StanceTendencyTool(BaseToolFrame):
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="立场倾向得分", style="Card.TLabelframe", padding=(12, 9))
+        form = ttk.LabelFrame(self, text="立场倾向分数&数量占比", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
@@ -1055,4 +1055,4 @@ class StanceTendencyTool(BaseToolFrame):
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典 {dictionary_rows} 行，匹配贴文 {matched_posts} 行，已写入 {stance_accounts} 个账号。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
-        self.run_in_background(task, on_success, start_message="已开始后台统计立场倾向得分和数量占比……")
+        self.run_in_background(task, on_success, start_message="已开始后台统计立场倾向分数和数量占比……")

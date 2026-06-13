@@ -107,7 +107,7 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="stance_tendency",
-                name="立场倾向得分",
+                name="立场倾向分数&数量占比",
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel、贴文 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
