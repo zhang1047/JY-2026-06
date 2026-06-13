@@ -17,6 +17,7 @@ from jy_toolbox.ui.tools import (
     PostThemeRatioTool,
     SentimentExpressionTool,
     SourceMediaCampRatioTool,
+    StanceTendencyTool,
 )
 from jy_toolbox.ui.base import BaseToolFrame
 from jy_toolbox.ui.widgets import make_rounded_button, rounded_rect_points
@@ -100,6 +101,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: SentimentExpressionTool(
                     parent, app, state, app.get_tool_description("sentiment_expression")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="stance_tendency",
+                name="立场倾向得分",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel、贴文 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
+                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“两岸议题立场倾向”枚举，"
+                    "按账号计算立场倾向分数（偏蓝 +1、中立 0、偏绿 -1）以及偏蓝、偏绿、中立的数量和占比。"
+                ),
+                factory=lambda parent, app, state: StanceTendencyTool(
+                    parent, app, state, app.get_tool_description("stance_tendency")
                 ),
             )
         )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from jy_toolbox.services.excel_io import read_excel_with_passwords
 
@@ -16,6 +16,18 @@ SENTIMENT_OUTPUT_COLUMNS = (
     "情感表达-负面（占比）",
     "情感表达-中性（数量）",
     "情感表达-中性（占比）",
+)
+
+STANCE_VALUES = ("偏蓝", "中立", "偏绿")
+STANCE_SCORE_MAP = {"偏蓝": 1, "中立": 0, "偏绿": -1}
+STANCE_OUTPUT_COLUMNS = (
+    "立场倾向-分数",
+    "立场倾向-偏蓝（数量）",
+    "立场倾向-偏蓝（占比）",
+    "立场倾向-偏绿（数量）",
+    "立场倾向-偏绿（占比）",
+    "立场倾向-中立（数量）",
+    "立场倾向-中立（占比）",
 )
 
 
@@ -623,4 +635,99 @@ def calculate_sentiment_expression_excel(
         "dictionary_rows": len(dictionary_df),
         "matched_posts": len(matched_work),
         "sentiment_accounts": sentiment_accounts,
+    }
+
+
+def calculate_stance_tendency_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    dictionary_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    dictionary_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+    if not dictionary_input_path.exists():
+        raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(25, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+    if progress is not None:
+        progress(40, "正在后台读取立场倾向字典 Excel……")
+    dictionary_df = read_excel_with_passwords(dictionary_input_path, passwords, dictionary_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖子正文":
+        raise ValueError("字典 Excel 第一列必须是：帖子正文")
+    if "两岸议题立场倾向" not in dictionary_df.columns:
+        raise ValueError("字典 Excel 缺少必要列：两岸议题立场倾向")
+
+    if progress is not None:
+        progress(55, "正在按帖子正文匹配两岸议题立场倾向……")
+    dictionary_work = dictionary_df.copy()
+    dictionary_work["__body_key__"] = dictionary_work["帖子正文"].map(_normalized_key)
+    dictionary_work["__stance__"] = dictionary_work["两岸议题立场倾向"].map(_normalized_key)
+    dictionary_work = dictionary_work[
+        (dictionary_work["__body_key__"] != "") & dictionary_work["__stance__"].isin(STANCE_VALUES)
+    ].drop_duplicates(subset=["__body_key__"], keep="first")
+    stance_by_body = dictionary_work.set_index("__body_key__")["__stance__"].to_dict()
+
+    post_work = post_df.copy()
+    post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
+    post_work["__body_key__"] = post_work["帖子正文"].map(_normalized_key)
+    post_work["__stance__"] = post_work["__body_key__"].map(stance_by_body)
+    matched_work = post_work[
+        (post_work["__homepage_key__"] != "") & post_work["__stance__"].map(_is_non_empty_cell)
+    ].copy()
+
+    if progress is not None:
+        progress(72, "正在按账号汇总立场倾向分数、数量和占比……")
+    stats_by_homepage: dict[str, dict[str, str | int]] = {}
+    for homepage, homepage_rows in matched_work.groupby("__homepage_key__", sort=False):
+        counts = {name: int((homepage_rows["__stance__"] == name).sum()) for name in STANCE_VALUES}
+        total = sum(counts.values())
+        stats: dict[str, str | int] = {
+            "立场倾向-分数": sum(counts[name] * STANCE_SCORE_MAP[name] for name in STANCE_VALUES),
+        }
+        for name in STANCE_VALUES:
+            stats[f"立场倾向-{name}（数量）"] = counts[name]
+            stats[f"立场倾向-{name}（占比）"] = _format_single_percentage(counts[name], total)
+        stats_by_homepage[str(homepage)] = stats
+
+    if progress is not None:
+        progress(84, "正在写回账号表立场倾向统计列……")
+    output_df = account_df.copy()
+    drop_columns = [column for column in STANCE_OUTPUT_COLUMNS if column in output_df.columns]
+    if drop_columns:
+        output_df = output_df.drop(columns=drop_columns)
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for column in STANCE_OUTPUT_COLUMNS:
+        output_df[column] = account_keys.map(lambda key, column=column: stats_by_homepage.get(key, {}).get(column, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    stance_accounts = int(output_df[list(STANCE_OUTPUT_COLUMNS)].apply(lambda row: any(_is_non_empty_cell(value) for value in row), axis=1).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "dictionary_rows": len(dictionary_df),
+        "matched_posts": len(matched_work),
+        "stance_accounts": stance_accounts,
     }
