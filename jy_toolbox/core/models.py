@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from jy_toolbox.ui.base import BaseToolFrame
     from jy_toolbox.ui.app import ToolboxApp
 
+
+@dataclass(frozen=True)
 class ToolDefinition:
     key: str
     name: str
