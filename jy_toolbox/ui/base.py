@@ -164,7 +164,10 @@ class BaseToolFrame(ttk.Frame):
             return
         if hasattr(self, "status_var"):
             self.status_var.set(old_status or "工作表识别失败。")
-        messagebox.showwarning("提示", f"读取工作表失败：{exc}", parent=self)
+        message = str(exc)
+        if not message.startswith("读取工作表失败"):
+            message = f"读取工作表失败：{message}"
+        messagebox.showwarning("提示", message, parent=self)
 
     def set_progress(self, value: float, message: str | None = None) -> None:
         self.progress_var.set(max(0, min(100, value)))

@@ -64,13 +64,13 @@ class PasswordBookDialog(tk.Toplevel):
         password = simpledialog.askstring("新增密码", "请输入文档打开密码：", parent=self, show="*")
         if password is None:
             return
-        password = password.strip()
-        if not password:
+        if password == "":
             messagebox.showwarning("提示", "密码不能为空。", parent=self)
             return
         self.app.config.data.setdefault("passwords", []).append(password)
         self.app.config.save()
         self.refresh()
+        self.app.refresh_current_excel_sheets()
 
     def delete_checked(self) -> None:
         passwords = self.app.config.data.setdefault("passwords", [])
@@ -81,6 +81,7 @@ class PasswordBookDialog(tk.Toplevel):
         self.app.config.data["passwords"] = keep
         self.app.config.save()
         self.refresh()
+        self.app.refresh_current_excel_sheets()
 
 class DescriptionEditDialog(tk.Toplevel):
     """小型说明编辑弹窗，主界面只保留一两行展示和编辑入口。"""
