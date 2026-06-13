@@ -237,6 +237,77 @@ def calculate_average_post_length_excel(
         "averaged_accounts": averaged_accounts,
     }
 
+
+def calculate_active_day_ratio_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    import pandas as pd
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在解析贴文发布时间并统计发帖日期……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce")
+    work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
+    work["__post_date__"] = work["__post_datetime__"].dt.date
+
+    if progress is not None:
+        progress(72, "正在按账号汇总活跃天数占比……")
+    ratios_by_homepage: dict[str, str] = {}
+    for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
+        first_date = homepage_rows["__post_date__"].min()
+        last_date = homepage_rows["__post_date__"].max()
+        date_range_days = (last_date - first_date).days + 1
+        active_days = int(homepage_rows["__post_date__"].nunique())
+        ratios_by_homepage[str(homepage)] = _format_single_percentage(active_days, date_range_days)
+
+    if progress is not None:
+        progress(84, "正在写回账号表活跃天数占比列……")
+    output_df = account_df.copy()
+    if "活跃天数占比" in output_df.columns:
+        output_df = output_df.drop(columns=["活跃天数占比"])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df["活跃天数占比"] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(work["__homepage_key__"])).sum())
+    active_ratio_accounts = int(output_df["活跃天数占比"].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "valid_time_posts": len(work),
+        "matched_accounts": matched_accounts,
+        "active_ratio_accounts": active_ratio_accounts,
+    }
+
 def _format_category_ratios(counts: dict[str, int]) -> str:
     total = sum(counts.values())
     if total <= 0:
