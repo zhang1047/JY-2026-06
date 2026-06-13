@@ -99,7 +99,14 @@ class BaseToolFrame(ttk.Frame):
         ttk.Label(parent, text=hint).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         return combo
 
-    def populate_sheets_async(self, excel_path: str, combo: ttk.Combobox, var: tk.StringVar) -> None:
+    def populate_sheets_async(
+        self,
+        excel_path: str,
+        combo: ttk.Combobox,
+        var: tk.StringVar,
+        *,
+        show_errors: bool = True,
+    ) -> None:
         """在后台识别 Excel sheet，避免大文件在选择文件或切换工具时卡住界面。"""
         if not excel_path:
             combo["values"] = ()
@@ -121,13 +128,26 @@ class BaseToolFrame(ttk.Frame):
                     self.app.config.data.get("passwords", []),
                 )
             except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
-                self.after(0, lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, old_status))
+                self._schedule_sheet_loading_callback(
+                    lambda exc=exc: self._finish_sheet_loading_error(
+                        combo_key, seq, exc, old_status, show_errors, combo
+                    )
+                )
             else:
-                self.after(0, lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var, old_status))
+                self._schedule_sheet_loading_callback(
+                    lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var, old_status)
+                )
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def load_configured_sheets_async(self) -> None:
+    def _schedule_sheet_loading_callback(self, callback: Callable[[], None]) -> None:
+        """安全投递 sheet 识别回调；工具页切换或窗口关闭后直接丢弃。"""
+        try:
+            self.after(0, callback)
+        except tk.TclError:
+            pass
+
+    def load_configured_sheets_async(self, *, show_errors: bool = False) -> None:
         """按通用命名约定自动识别当前工具已填写的 Excel 工作表。"""
         mappings = (
             ("input_var", "sheet_combo", "sheet_var"),
@@ -140,7 +160,7 @@ class BaseToolFrame(ttk.Frame):
                 path_var = getattr(self, path_attr)
                 combo = getattr(self, combo_attr)
                 sheet_var = getattr(self, sheet_attr)
-                self.populate_sheets_async(path_var.get().strip(), combo, sheet_var)
+                self.populate_sheets_async(path_var.get().strip(), combo, sheet_var, show_errors=show_errors)
 
     def _finish_sheet_loading_success(
         self,
@@ -153,21 +173,41 @@ class BaseToolFrame(ttk.Frame):
     ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
             return
+        if not self._sheet_loading_widgets_exist(combo):
+            return
         combo["values"] = sheet_names
         if sheet_names and var.get().strip() not in sheet_names:
             var.set(sheet_names[0])
         if hasattr(self, "status_var"):
             self.status_var.set(old_status or "工作表识别完成。")
 
-    def _finish_sheet_loading_error(self, combo_key: int, seq: int, exc: Exception, old_status: str) -> None:
+    def _finish_sheet_loading_error(
+        self,
+        combo_key: int,
+        seq: int,
+        exc: Exception,
+        old_status: str,
+        show_errors: bool,
+        combo: ttk.Combobox,
+    ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
+            return
+        if not self._sheet_loading_widgets_exist(combo):
             return
         if hasattr(self, "status_var"):
             self.status_var.set(old_status or "工作表识别失败。")
         message = str(exc)
         if not message.startswith("读取工作表失败"):
             message = f"读取工作表失败：{message}"
-        messagebox.showwarning("提示", message, parent=self)
+        if show_errors:
+            messagebox.showwarning("提示", message, parent=self)
+
+    def _sheet_loading_widgets_exist(self, combo: ttk.Combobox) -> bool:
+        """判断异步 sheet 识别结果对应的工具页和下拉框是否仍然存在。"""
+        try:
+            return bool(self.winfo_exists() and combo.winfo_exists())
+        except tk.TclError:
+            return False
 
     def set_progress(self, value: float, message: str | None = None) -> None:
         self.progress_var.set(max(0, min(100, value)))
