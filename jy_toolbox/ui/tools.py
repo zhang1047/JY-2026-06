@@ -15,7 +15,6 @@ from jy_toolbox.services.analytics import (
     calculate_source_media_camp_ratios_excel,
     deduplicate_posts_excel,
 )
-from jy_toolbox.services.excel_io import list_excel_sheet_names_with_passwords
 from jy_toolbox.ui.base import BaseToolFrame
 from jy_toolbox.ui.widgets import make_rounded_button
 
@@ -35,9 +34,7 @@ class PostDedupTool(BaseToolFrame):
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "输入 Excel：", self.input_var, self.choose_input)
         self._path_row(form, 1, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="工作表名：").grid(row=2, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.sheet_var).grid(row=2, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=2, column=2, sticky="w", padx=10, pady=8)
+        self.sheet_combo = self.add_sheet_selector(form, 2, "工作表名：", self.sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -48,6 +45,7 @@ class PostDedupTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(
         self,
@@ -69,6 +67,7 @@ class PostDedupTool(BaseToolFrame):
         if not path:
             return
         self.input_var.set(path)
+        self.populate_sheets_async(path, self.sheet_combo, self.sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_去重后.xlsx")))
@@ -148,12 +147,8 @@ class PostTypeRatioTool(BaseToolFrame):
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="账号表工作表：").grid(row=3, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=3, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=3, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="贴文表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
+        self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -164,6 +159,7 @@ class PostTypeRatioTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(
         self,
@@ -185,6 +181,7 @@ class PostTypeRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_帖子类型占比.xlsx")))
@@ -197,6 +194,7 @@ class PostTypeRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -288,12 +286,8 @@ class AveragePostLengthTool(BaseToolFrame):
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="账号表工作表：").grid(row=3, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=3, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=3, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="贴文表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
+        self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -304,6 +298,7 @@ class AveragePostLengthTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(
         self,
@@ -325,6 +320,7 @@ class AveragePostLengthTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_平均发帖长度.xlsx")))
@@ -337,6 +333,7 @@ class AveragePostLengthTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -430,12 +427,8 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="账号表工作表：").grid(row=3, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=3, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=3, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="贴文表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
+        self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -446,6 +439,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(
         self,
@@ -467,6 +461,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_附加观点转发率.xlsx")))
@@ -479,6 +474,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -584,21 +580,9 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="账号表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="贴文表工作表：").grid(row=5, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=5, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=5, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="字典表工作表：").grid(row=6, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.dictionary_sheet_var).grid(row=6, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="请填写字典 Excel 的 sheet 名；留空则读取第一个工作表").grid(
-            row=6,
-            column=2,
-            sticky="w",
-            padx=10,
-            pady=8,
-        )
+        self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -609,6 +593,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(
         self,
@@ -630,6 +615,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_媒体阵营分布.xlsx")))
@@ -642,6 +628,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_dictionary_input(self) -> None:
@@ -651,6 +638,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         )
         if path:
             self.dictionary_input_var.set(path)
+            self.populate_sheets_async(path, self.dictionary_sheet_combo, self.dictionary_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -758,15 +746,9 @@ class PostThemeRatioTool(BaseToolFrame):
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
-        ttk.Label(form, text="账号表工作表：").grid(row=4, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.account_sheet_var).grid(row=4, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=4, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="贴文表工作表：").grid(row=5, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.post_sheet_var).grid(row=5, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="留空则读取第一个工作表").grid(row=5, column=2, sticky="w", padx=10, pady=8)
-        ttk.Label(form, text="字典表工作表：").grid(row=6, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(form, textvariable=self.dictionary_sheet_var).grid(row=6, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(form, text="选择含第一列“帖子正文”和“内容偏好”列的 sheet；留空则读取第一个工作表").grid(row=6, column=2, sticky="w", padx=10, pady=8)
+        self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var, hint="选择含第一列“帖子正文”和“内容偏好”列的 sheet")
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -777,6 +759,7 @@ class PostThemeRatioTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
@@ -788,6 +771,7 @@ class PostThemeRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_帖子主题占比.xlsx")))
@@ -797,12 +781,14 @@ class PostThemeRatioTool(BaseToolFrame):
         path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_dictionary_input(self) -> None:
         path = filedialog.askopenfilename(title="选择内容偏好字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.dictionary_input_var.set(path)
+            self.populate_sheets_async(path, self.dictionary_sheet_combo, self.dictionary_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -885,9 +871,9 @@ class SentimentExpressionTool(BaseToolFrame):
         self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
-        self.account_sheet_combo = self._sheet_row(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self._sheet_row(form, 5, "贴文表工作表：", self.post_sheet_var)
-        self.dictionary_sheet_combo = self._sheet_row(form, 6, "字典表工作表：", self.dictionary_sheet_var)
+        self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
@@ -897,56 +883,32 @@ class SentimentExpressionTool(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
         self.add_progress_bar(status_card)
-        self._load_initial_sheets()
+        self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
 
-    def _sheet_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar) -> ttk.Combobox:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
-        combo = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
-        combo.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
-        ttk.Label(parent, text="导入 Excel 后自动识别 sheet，下拉选择").grid(row=row, column=2, sticky="w", padx=10, pady=8)
-        return combo
-
-    def _populate_sheets(self, excel_path: str, combo: ttk.Combobox, var: tk.StringVar) -> None:
-        if not excel_path:
-            return
-        try:
-            sheet_names = list_excel_sheet_names_with_passwords(Path(excel_path), self.app.config.data.get("passwords", []))
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showwarning("提示", f"读取工作表失败：{exc}", parent=self)
-            return
-        combo["values"] = sheet_names
-        if sheet_names and var.get().strip() not in sheet_names:
-            var.set(sheet_names[0])
-
-    def _load_initial_sheets(self) -> None:
-        self._populate_sheets(self.account_input_var.get().strip(), self.account_sheet_combo, self.account_sheet_var)
-        self._populate_sheets(self.post_input_var.get().strip(), self.post_sheet_combo, self.post_sheet_var)
-        self._populate_sheets(self.dictionary_input_var.get().strip(), self.dictionary_sheet_combo, self.dictionary_sheet_var)
-
     def choose_account_input(self) -> None:
         path = filedialog.askopenfilename(title="选择账号 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if not path:
             return
         self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path); self.output_var.set(str(p.with_name(f"{p.stem}_情感表达统计.xlsx")))
-        self._populate_sheets(path, self.account_sheet_combo, self.account_sheet_var)
         self.save_state()
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
-            self.post_input_var.set(path); self._populate_sheets(path, self.post_sheet_combo, self.post_sheet_var); self.save_state()
+            self.post_input_var.set(path); self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var); self.save_state()
 
     def choose_dictionary_input(self) -> None:
         path = filedialog.askopenfilename(title="选择情感表达字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
-            self.dictionary_input_var.set(path); self._populate_sheets(path, self.dictionary_sheet_combo, self.dictionary_sheet_var); self.save_state()
+            self.dictionary_input_var.set(path); self.populate_sheets_async(path, self.dictionary_sheet_combo, self.dictionary_sheet_var); self.save_state()
 
     def choose_output(self) -> None:
         path = filedialog.asksaveasfilename(title="保存账号表处理结果", defaultextension=".xlsx", filetypes=[("Excel 文件", "*.xlsx")])
