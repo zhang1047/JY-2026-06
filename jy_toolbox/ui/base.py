@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any, Callable
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from jy_toolbox.core.constants import *
+from jy_toolbox.services.excel_io import list_excel_sheet_names_with_passwords
 from jy_toolbox.ui.widgets import make_rounded_button
 
 class BaseToolFrame(ttk.Frame):
@@ -16,6 +18,7 @@ class BaseToolFrame(ttk.Frame):
         self.description = description
         self.description_var = tk.StringVar(value=description)
         self._background_running = False
+        self._sheet_loading_seq: dict[int, int] = {}
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar: ttk.Progressbar | None = None
 
@@ -79,6 +82,89 @@ class BaseToolFrame(ttk.Frame):
         self.progress_bar = ttk.Progressbar(parent, variable=self.progress_var, maximum=100, mode="determinate")
         self.progress_bar.pack(fill="x", pady=(8, 0))
         return self.progress_bar
+
+    def add_sheet_selector(
+        self,
+        parent: ttk.LabelFrame,
+        row: int,
+        label: str,
+        var: tk.StringVar,
+        *,
+        hint: str = "导入 Excel 后自动识别 sheet，下拉选择",
+    ) -> ttk.Combobox:
+        """增加统一的 sheet 下拉框，供当前和后续 Excel 工具复用。"""
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        combo = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
+        combo.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Label(parent, text=hint).grid(row=row, column=2, sticky="w", padx=10, pady=8)
+        return combo
+
+    def populate_sheets_async(self, excel_path: str, combo: ttk.Combobox, var: tk.StringVar) -> None:
+        """在后台识别 Excel sheet，避免大文件在选择文件或切换工具时卡住界面。"""
+        if not excel_path:
+            combo["values"] = ()
+            return
+
+        combo_key = id(combo)
+        seq = self._sheet_loading_seq.get(combo_key, 0) + 1
+        self._sheet_loading_seq[combo_key] = seq
+        old_status = self.status_var.get() if hasattr(self, "status_var") else ""
+        combo["values"] = ()
+        var.set(var.get().strip())
+        if hasattr(self, "status_var"):
+            self.status_var.set(f"正在后台识别工作表：{Path(excel_path).name}……")
+
+        def worker() -> None:
+            try:
+                sheet_names = list_excel_sheet_names_with_passwords(
+                    Path(excel_path),
+                    self.app.config.data.get("passwords", []),
+                )
+            except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
+                self.after(0, lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, old_status))
+            else:
+                self.after(0, lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var, old_status))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def load_configured_sheets_async(self) -> None:
+        """按通用命名约定自动识别当前工具已填写的 Excel 工作表。"""
+        mappings = (
+            ("input_var", "sheet_combo", "sheet_var"),
+            ("account_input_var", "account_sheet_combo", "account_sheet_var"),
+            ("post_input_var", "post_sheet_combo", "post_sheet_var"),
+            ("dictionary_input_var", "dictionary_sheet_combo", "dictionary_sheet_var"),
+        )
+        for path_attr, combo_attr, sheet_attr in mappings:
+            if all(hasattr(self, attr) for attr in (path_attr, combo_attr, sheet_attr)):
+                path_var = getattr(self, path_attr)
+                combo = getattr(self, combo_attr)
+                sheet_var = getattr(self, sheet_attr)
+                self.populate_sheets_async(path_var.get().strip(), combo, sheet_var)
+
+    def _finish_sheet_loading_success(
+        self,
+        combo_key: int,
+        seq: int,
+        sheet_names: list[str],
+        combo: ttk.Combobox,
+        var: tk.StringVar,
+        old_status: str,
+    ) -> None:
+        if seq != self._sheet_loading_seq.get(combo_key):
+            return
+        combo["values"] = sheet_names
+        if sheet_names and var.get().strip() not in sheet_names:
+            var.set(sheet_names[0])
+        if hasattr(self, "status_var"):
+            self.status_var.set(old_status or "工作表识别完成。")
+
+    def _finish_sheet_loading_error(self, combo_key: int, seq: int, exc: Exception, old_status: str) -> None:
+        if seq != self._sheet_loading_seq.get(combo_key):
+            return
+        if hasattr(self, "status_var"):
+            self.status_var.set(old_status or "工作表识别失败。")
+        messagebox.showwarning("提示", f"读取工作表失败：{exc}", parent=self)
 
     def set_progress(self, value: float, message: str | None = None) -> None:
         self.progress_var.set(max(0, min(100, value)))
