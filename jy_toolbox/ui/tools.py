@@ -409,6 +409,7 @@ class ActiveDayRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
     POST_TIME_COLUMN = "贴文发布时间"
+    POST_COUNT_COLUMN = "帖子数量"
     OUTPUT_COLUMN = "活跃天数占比"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
 
@@ -532,7 +533,8 @@ class ActiveDayRatioTool(BaseToolFrame):
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
                 "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
-                "已匹配 {matched_accounts} 个账号，已写入 {active_ratio_accounts} 个账号。输出：{output}".format(
+                "已匹配 {matched_accounts} 个账号，已写入帖子数量 {post_count_accounts} 个账号，"
+                "已写入活跃天数占比 {active_ratio_accounts} 个账号。输出：{output}".format(
                     **result,
                     output=output_path,
                 )
