@@ -322,7 +322,7 @@ class ToolboxApp:
     def refresh_current_excel_sheets(self) -> None:
         """密码本更新后，重新识别当前工具里已选择的 Excel 工作表。"""
         if self.current_tool_frame is not None:
-            self.current_tool_frame.load_configured_sheets_async()
+            self.current_tool_frame.load_configured_sheets_async(show_errors=True)
 
     def open_tool_list(self) -> None:
         if self.tool_list_dialog is not None and self.tool_list_dialog.winfo_exists():
