@@ -1,0 +1,422 @@
+from __future__ import annotations
+
+import random
+from pathlib import Path
+from typing import Callable
+
+from jy_toolbox.services.excel_io import read_excel_with_passwords
+
+def deduplicate_posts_excel(
+    input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    import pandas as pd
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"输入文件不存在：{input_path}")
+    df = read_excel_with_passwords(input_path, passwords, sheet_name)
+    if progress is not None:
+        progress(35, "已读取 Excel，正在检查必要列……")
+    missing = [col for col in ["贴文url", "点赞数", "分享数", "评论数"] if col not in df.columns]
+    if missing:
+        raise ValueError(f"Excel 缺少必要列：{', '.join(missing)}")
+
+    work = df.copy()
+    if progress is not None:
+        progress(55, "正在计算重复贴文保留规则……")
+    score_cols = ["点赞数", "分享数", "评论数"]
+    numeric_scores = work[score_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+    work["__dedup_score__"] = numeric_scores.sum(axis=1)
+    work["__dedup_random__"] = [random.random() for _ in range(len(work))]
+    work["__dedup_order__"] = range(len(work))
+    kept = (
+        work.sort_values(["贴文url", "__dedup_score__", "__dedup_random__"], ascending=[True, False, False])
+        .drop_duplicates(subset=["贴文url"], keep="first")
+        .sort_values("__dedup_order__")
+        .drop(columns=["__dedup_score__", "__dedup_random__", "__dedup_order__"])
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(85, "正在写出处理结果……")
+    kept.to_excel(output_path, index=False)
+    return {"original": len(df), "removed": len(df) - len(kept), "kept": len(kept)}
+
+def _is_non_empty_cell(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip()
+    return bool(text) and text.lower() != "nan"
+
+def _normalized_key(value: Any) -> str:
+    return str(value).strip() if _is_non_empty_cell(value) else ""
+
+def classify_post_type(row: Any) -> str:
+    homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
+    post_url = "" if not _is_non_empty_cell(row.get("贴文url")) else str(row.get("贴文url"))
+    if "/videos/" in homepage_url.lower() or "/videos/" in post_url.lower():
+        return "视频"
+    attachments = "" if not _is_non_empty_cell(row.get("图片附件")) else str(row.get("图片附件"))
+    if attachments.count("origin_url_md5") >= 2:
+        return "图片"
+    if str(row.get("创作类型", "")).strip().lower() == "common":
+        if _is_non_empty_cell(row.get("标题")) or _is_non_empty_cell(row.get("帖子正文")):
+            return "文字"
+    return ""
+
+def _format_post_type_ratios(counts: dict[str, int]) -> dict[str, str]:
+    total = sum(counts.values())
+    if total <= 0:
+        return {column: "" for column in ("文字帖占比", "图片帖占比", "视频帖占比")}
+    return {
+        "文字帖占比": f"{counts.get('文字', 0) / total * 100:.2f}%",
+        "图片帖占比": f"{counts.get('图片', 0) / total * 100:.2f}%",
+        "视频帖占比": f"{counts.get('视频', 0) / total * 100:.2f}%",
+    }
+
+def calculate_post_type_ratios_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
+    missing_posts = [col for col in ["主页url", "图片附件", "创作类型", "标题", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(50, "正在识别每条贴文的文字、图片、视频类型……")
+    work = post_df.copy()
+    work["__post_type__"] = work.apply(classify_post_type, axis=1)
+    typed_work = work[work["__post_type__"].isin(["文字", "图片", "视频"])].copy()
+
+    empty_ratios = {column: "" for column in ("文字帖占比", "图片帖占比", "视频帖占比")}
+    ratios_by_homepage: dict[str, dict[str, str]] = {}
+    if not typed_work.empty:
+        grouped = typed_work.groupby("主页url")["__post_type__"].value_counts()
+        for homepage, counts_series in grouped.groupby(level=0):
+            counts = {str(type_name): int(count) for (_, type_name), count in counts_series.items()}
+            ratios_by_homepage[_normalized_key(homepage)] = _format_post_type_ratios(counts)
+
+    if progress is not None:
+        progress(75, "正在写回账号表最后三列类型占比……")
+    output_df = account_df.copy()
+    drop_columns = [
+        column
+        for column in (PostTypeRatioTool.LEGACY_OUTPUT_COLUMN, *("文字帖占比", "图片帖占比", "视频帖占比"))
+        if column in output_df.columns
+    ]
+    if drop_columns:
+        output_df = output_df.drop(columns=drop_columns)
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for column in ("文字帖占比", "图片帖占比", "视频帖占比"):
+        output_df[column] = account_keys.map(lambda key, column=column: ratios_by_homepage.get(key, empty_ratios).get(column, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(90, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(_normalized_key(v) for v in post_df["主页url"])).sum())
+    typed_accounts = int(output_df[("文字帖占比", "图片帖占比", "视频帖占比")[0]].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "matched_accounts": matched_accounts,
+        "typed_accounts": typed_accounts,
+    }
+
+def _post_body_text_length(value: Any) -> int:
+    if not _is_non_empty_cell(value):
+        return 0
+    return len(str(value).strip())
+
+def calculate_average_post_length_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
+    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在计算每条贴文正文长度……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work = work[work["__homepage_key__"] != ""].copy()
+    work["__body_length__"] = work["帖子正文"].map(_post_body_text_length)
+
+    if progress is not None:
+        progress(72, "正在按账号汇总平均发帖长度……")
+    average_by_homepage: dict[str, float] = {}
+    for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
+        average_by_homepage[str(homepage)] = round(float(homepage_rows["__body_length__"].mean()), 2)
+
+    if progress is not None:
+        progress(84, "正在写回账号表平均发帖长度列……")
+    output_df = account_df.copy()
+    if "平均发帖长度" in output_df.columns:
+        output_df = output_df.drop(columns=["平均发帖长度"])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df["平均发帖长度"] = account_keys.map(lambda key: average_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(work["__homepage_key__"])).sum())
+    averaged_accounts = int(output_df["平均发帖长度"].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "matched_accounts": matched_accounts,
+        "averaged_accounts": averaged_accounts,
+    }
+
+def _format_category_ratios(counts: dict[str, int]) -> str:
+    total = sum(counts.values())
+    if total <= 0:
+        return ""
+    return "；".join(f"{name}：{count / total * 100:.2f}%" for name, count in counts.items())
+
+def _format_single_percentage(count: int, total: int) -> str:
+    if total <= 0:
+        return ""
+    return f"{count / total * 100:.2f}%"
+
+def calculate_added_opinion_share_rate_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
+    missing_posts = [col for col in ["主页url", "创作类型", "标题", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在识别转发贴是否附加标题或帖子正文……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__creation_type__"] = work["创作类型"].map(
+        lambda value: str(value).strip().lower() if _is_non_empty_cell(value) else ""
+    )
+    share_work = work[(work["__creation_type__"] == "share") & (work["__homepage_key__"] != "")].copy()
+    share_work["__has_added_opinion__"] = share_work.apply(
+        lambda row: _is_non_empty_cell(row.get("标题"))
+        or _is_non_empty_cell(row.get("帖子正文")),
+        axis=1,
+    )
+
+    if progress is not None:
+        progress(72, "正在按账号汇总附加观点转发率……")
+    ratios_by_homepage: dict[str, str] = {}
+    for homepage, homepage_rows in share_work.groupby("__homepage_key__", sort=False):
+        added_opinion_count = int(homepage_rows["__has_added_opinion__"].sum())
+        ratios_by_homepage[str(homepage)] = _format_single_percentage(added_opinion_count, len(homepage_rows))
+
+    if progress is not None:
+        progress(84, "正在写回账号表附加观点转发率列……")
+    output_df = account_df.copy()
+    if "附加观点转发率" in output_df.columns:
+        output_df = output_df.drop(columns=["附加观点转发率"])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df["附加观点转发率"] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(share_work["__homepage_key__"])).sum())
+    rated_accounts = int(output_df["附加观点转发率"].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "share_posts": len(share_work),
+        "matched_accounts": matched_accounts,
+        "rated_accounts": rated_accounts,
+    }
+
+def calculate_source_media_camp_ratios_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    dictionary_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    dictionary_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+    if not dictionary_input_path.exists():
+        raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(25, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+    if progress is not None:
+        progress(40, "正在后台读取账号名字典 Excel……")
+    dictionary_df = read_excel_with_passwords(dictionary_input_path, passwords, dictionary_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
+    missing_posts = [col for col in ["主页url", "创作类型", "分享贴账号名"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+    missing_dictionary = [col for col in ["分享贴账号名", "账号立场归属", "账号类型归属"] if col not in dictionary_df.columns]
+    if missing_dictionary:
+        raise ValueError(f"字典 Excel 缺少必要列：{', '.join(missing_dictionary)}")
+
+    if progress is not None:
+        progress(55, "正在按字典匹配分享贴账号名……")
+    dictionary_work = dictionary_df.copy()
+    dictionary_work["__shared_account_key__"] = dictionary_work["分享贴账号名"].map(
+        _normalized_key
+    )
+    dictionary_work = dictionary_work[dictionary_work["__shared_account_key__"] != ""].drop_duplicates(
+        subset=["__shared_account_key__"],
+        keep="first",
+    )
+    stance_by_shared_account = dictionary_work.set_index("__shared_account_key__")[
+        SourceMediaCampRatioTool.STANCE_COLUMN
+    ].to_dict()
+    type_by_shared_account = dictionary_work.set_index("__shared_account_key__")[
+        SourceMediaCampRatioTool.ACCOUNT_TYPE_COLUMN
+    ].to_dict()
+
+    post_work = post_df.copy()
+    post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
+    post_work["__shared_account_key__"] = post_work["分享贴账号名"].map(
+        _normalized_key
+    )
+    post_work["__creation_type__"] = post_work["创作类型"].map(
+        lambda value: str(value).strip().lower() if _is_non_empty_cell(value) else ""
+    )
+    share_work = post_work[
+        (post_work["__creation_type__"] == "share")
+        & (post_work["__homepage_key__"] != "")
+        & (post_work["__shared_account_key__"] != "")
+    ].copy()
+    share_work["__stance__"] = share_work["__shared_account_key__"].map(stance_by_shared_account)
+    share_work["__account_type__"] = share_work["__shared_account_key__"].map(type_by_shared_account)
+    dictionary_keys = set(dictionary_work["__shared_account_key__"])
+    matched_share_posts = int(share_work["__shared_account_key__"].isin(dictionary_keys).sum())
+
+    if progress is not None:
+        progress(70, "正在汇总每个账号的立场、类型和官方信源占比……")
+    ratios_by_homepage: dict[str, dict[str, str]] = {}
+    for homepage, homepage_rows in share_work.groupby("__homepage_key__", sort=False):
+        stance_counts = {
+            str(name): int(count)
+            for name, count in homepage_rows.loc[
+                homepage_rows["__stance__"].map(_is_non_empty_cell), "__stance__"
+            ].value_counts(sort=False).items()
+        }
+        type_counts = {
+            str(name): int(count)
+            for name, count in homepage_rows.loc[
+                homepage_rows["__account_type__"].map(_is_non_empty_cell), "__account_type__"
+            ].value_counts(sort=False).items()
+        }
+        official_source_count = type_counts.get(SourceMediaCampRatioTool.OFFICIAL_SOURCE_TYPE, 0)
+        total_typed_sources = sum(type_counts.values())
+        ratios_by_homepage[str(homepage)] = {
+            "账号立场归属占比": _format_category_ratios(stance_counts),
+            "账号类型归属占比": _format_category_ratios(type_counts),
+            "官方信源占比": _format_single_percentage(official_source_count, total_typed_sources),
+        }
+
+    if progress is not None:
+        progress(82, "正在写回账号表最后三列媒体阵营分布……")
+    output_df = account_df.copy()
+    drop_columns = [column for column in SourceMediaCampRatioTool.OUTPUT_COLUMNS if column in output_df.columns]
+    if drop_columns:
+        output_df = output_df.drop(columns=drop_columns)
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for column in SourceMediaCampRatioTool.OUTPUT_COLUMNS:
+        output_df[column] = account_keys.map(
+            lambda key, column=column: ratios_by_homepage.get(key, {}).get(column, "")
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(92, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    classified_accounts = int(
+        output_df[list(SourceMediaCampRatioTool.OUTPUT_COLUMNS)].apply(
+            lambda row: any(_is_non_empty_cell(value) for value in row),
+            axis=1,
+        ).sum()
+    )
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "share_posts": len(share_work),
+        "matched_share_posts": matched_share_posts,
+        "classified_accounts": classified_accounts,
+    }
