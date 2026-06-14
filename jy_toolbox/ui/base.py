@@ -94,15 +94,17 @@ class BaseToolFrame(ttk.Frame):
         var: tk.StringVar,
         *,
         hint: str = "导入 Excel 后自动识别 sheet，下拉选择",
-    ) -> ttk.Combobox:
-        """增加统一的 sheet 下拉框，供当前和后续 Excel 工具复用。"""
-        if label in {"账号表工作表：", "贴文表工作表："}:
-            hint = "默认读取第一个 sheet（不自动识别）"
+    ) -> tk.Widget:
+        """增加统一的 sheet 输入控件，供当前和后续 Excel 工具复用。"""
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
-        combo = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
-        combo.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        if label in {"账号表工作表：", "贴文表工作表："}:
+            hint = "留空读取第一个 sheet，可手动输入工作表名"
+            widget = ttk.Entry(parent, textvariable=var)
+        else:
+            widget = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
+        widget.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         ttk.Label(parent, text=hint).grid(row=row, column=2, sticky="w", padx=10, pady=8)
-        return combo
+        return widget
 
     def _widget_exists(self, widget: tk.Widget) -> bool:
         """安全判断 Tk 控件是否仍然存在。
@@ -167,12 +169,13 @@ class BaseToolFrame(ttk.Frame):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def use_first_sheet_by_default(self, combo: ttk.Combobox, var: tk.StringVar) -> None:
-        """账号表和贴文表不识别工作表，始终让读取逻辑使用第一个 sheet。"""
+    def use_first_sheet_by_default(self, combo: tk.Widget, var: tk.StringVar) -> None:
+        """账号表和贴文表不自动识别工作表；留空时读取逻辑使用第一个 sheet。"""
         if not self._widget_exists(combo):
             return
-        combo["values"] = ()
-        var.set("")
+        if isinstance(combo, ttk.Combobox):
+            combo["values"] = ()
+        var.set(var.get().strip())
 
     def load_configured_sheets_async(self, *, show_errors: bool = False) -> None:
         """按通用命名约定自动识别当前工具已填写的 Excel 工作表。"""
