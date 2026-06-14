@@ -188,6 +188,18 @@ class ToolListDialog(tk.Toplevel):
 
     def _bind_mousewheel_scrolling(self) -> None:
         def on_mousewheel(event: tk.Event) -> str:
+            pointer_x = self.winfo_pointerx()
+            pointer_y = self.winfo_pointery()
+            canvas_x = self.canvas.winfo_rootx()
+            canvas_y = self.canvas.winfo_rooty()
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+            pointer_over_canvas = (
+                canvas_x <= pointer_x < canvas_x + canvas_width
+                and canvas_y <= pointer_y < canvas_y + canvas_height
+            )
+            if not pointer_over_canvas:
+                return ""
             if event.num == 4:
                 delta = -1
             elif event.num == 5:
@@ -198,18 +210,9 @@ class ToolListDialog(tk.Toplevel):
                 self.canvas.yview_scroll(delta, "units")
             return "break"
 
-        def bind_events(_event: tk.Event) -> None:
-            self.canvas.bind_all("<MouseWheel>", on_mousewheel)
-            self.canvas.bind_all("<Button-4>", on_mousewheel)
-            self.canvas.bind_all("<Button-5>", on_mousewheel)
-
-        def unbind_events(_event: tk.Event) -> None:
-            self.canvas.unbind_all("<MouseWheel>")
-            self.canvas.unbind_all("<Button-4>")
-            self.canvas.unbind_all("<Button-5>")
-
-        self.canvas.bind("<Enter>", bind_events)
-        self.canvas.bind("<Leave>", unbind_events)
+        self.canvas.bind_all("<MouseWheel>", on_mousewheel)
+        self.canvas.bind_all("<Button-4>", on_mousewheel)
+        self.canvas.bind_all("<Button-5>", on_mousewheel)
 
     def close(self) -> None:
         self.canvas.unbind_all("<MouseWheel>")

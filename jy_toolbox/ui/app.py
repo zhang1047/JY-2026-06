@@ -36,6 +36,7 @@ class ToolboxApp:
         self.current_tool_frame: BaseToolFrame | None = None
         self.current_tool_key: str | None = None
         self.drag_data: dict[str, Any] = {}
+        self.drag_threshold = 6
         self.category_frames: dict[str, tk.Frame] = {}
         self.category_body_frames: dict[str, ttk.Frame] = {}
         self.category_drop_widgets: dict[str, set[tk.Widget]] = {}
@@ -503,7 +504,8 @@ class ToolboxApp:
                 role = "selected" if key == self.current_tool_key else "normal"
                 btn = make_rounded_button(row, tool.name, lambda k=key: self.open_tool(k), role=role, height=26)
                 btn.pack(side="left", fill="x", expand=True)
-                btn.bind("<ButtonPress-1>", lambda _e, k=key: self.start_drag(k), add="+")
+                btn.bind("<ButtonPress-1>", lambda e, k=key: self.start_drag(k, e), add="+")
+                btn.bind("<B1-Motion>", self.update_drag, add="+")
                 btn.bind("<ButtonRelease-1>", self.finish_drag, add="+")
                 up = make_rounded_button(row, "↑", lambda k=key: self.move_tool_order(k, -1), width=28, height=24)
                 up.pack(side="left", padx=(6, 2))
@@ -514,12 +516,29 @@ class ToolboxApp:
                 if index == len(order) - 1:
                     down.configure(state="disabled")
 
-    def start_drag(self, tool_key: str) -> None:
-        self.drag_data = {"tool_key": tool_key}
+    def start_drag(self, tool_key: str, event: tk.Event) -> None:
+        self.drag_data = {
+            "tool_key": tool_key,
+            "start_x_root": event.x_root,
+            "start_y_root": event.y_root,
+            "dragging": False,
+        }
+
+    def update_drag(self, event: tk.Event) -> None:
+        tool_key = self.drag_data.get("tool_key")
+        if not tool_key:
+            return
+        distance_x = abs(event.x_root - int(self.drag_data.get("start_x_root", event.x_root)))
+        distance_y = abs(event.y_root - int(self.drag_data.get("start_y_root", event.y_root)))
+        if distance_x >= self.drag_threshold or distance_y >= self.drag_threshold:
+            self.drag_data["dragging"] = True
 
     def finish_drag(self, event: tk.Event) -> None:
         tool_key = self.drag_data.get("tool_key")
         if not tool_key:
+            return
+        if not self.drag_data.get("dragging"):
+            self.drag_data = {}
             return
         widget = self.root.winfo_containing(event.x_root, event.y_root)
         while widget is not None:
@@ -533,7 +552,7 @@ class ToolboxApp:
 
     def drop_tool_to_category(self, category: str) -> None:
         tool_key = self.drag_data.get("tool_key")
-        if tool_key:
+        if tool_key and self.drag_data.get("dragging"):
             self.move_tool(tool_key, category)
             self.drag_data = {}
 
@@ -601,6 +620,7 @@ class ToolboxApp:
         self.refresh_tool_list()
 
     def open_tool(self, key: str) -> None:
+        self.drag_data = {}
         if self.current_tool_frame is not None:
             try:
                 self.current_tool_frame.save_description()
