@@ -13,6 +13,7 @@ from jy_toolbox.ui.tools import (
     ActiveDayRatioTool,
     AddedOpinionShareRateTool,
     AveragePostLengthTool,
+    DailyActiveSpanTool,
     PostDedupTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
@@ -117,6 +118,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: StanceTendencyTool(
                     parent, app, state, app.get_tool_description("stance_tendency")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="daily_active_span",
+                name="日均在线活跃时段跨度（小时/天）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "仅统计每个账号单日发帖 2 条及以上的日期，先按日期计算当天最早到最晚发帖时间间隔（小时），"
+                    "再对这些日期的间隔取平均值，并在账号表最后新增“日均在线活跃时段跨度（小时/天）”列。"
+                ),
+                factory=lambda parent, app, state: DailyActiveSpanTool(
+                    parent, app, state, app.get_tool_description("daily_active_span")
                 ),
             )
         )
