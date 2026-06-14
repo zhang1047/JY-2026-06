@@ -239,6 +239,81 @@ def calculate_average_post_length_excel(
 
 
 
+def calculate_average_original_post_interactions_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    import pandas as pd
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    required_post_columns = ["主页url", "创作类型", "点赞数", "分享数", "评论数"]
+    missing_posts = [col for col in required_post_columns if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在筛选原创帖并计算每帖互动数……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__creation_type__"] = work["创作类型"].map(
+        lambda value: str(value).strip().lower() if _is_non_empty_cell(value) else ""
+    )
+    original_work = work[(work["__homepage_key__"] != "") & (work["__creation_type__"] == "common")].copy()
+    interaction_columns = ["点赞数", "分享数", "评论数"]
+    original_work["__interactions__"] = original_work[interaction_columns].apply(
+        pd.to_numeric,
+        errors="coerce",
+    ).fillna(0).sum(axis=1)
+
+    if progress is not None:
+        progress(74, "正在按账号计算平均原创单帖互动数……")
+    average_by_homepage: dict[str, float] = {}
+    for homepage, homepage_rows in original_work.groupby("__homepage_key__", sort=False):
+        average_by_homepage[str(homepage)] = round(float(homepage_rows["__interactions__"].mean()), 2)
+
+    if progress is not None:
+        progress(84, "正在写回账号表平均原创单帖互动数列……")
+    output_column = "平均原创单帖互动数（条）"
+    output_df = account_df.copy()
+    if output_column in output_df.columns:
+        output_df = output_df.drop(columns=[output_column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df[output_column] = account_keys.map(lambda key: average_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(original_work["__homepage_key__"])).sum())
+    averaged_accounts = int(output_df[output_column].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "original_posts": len(original_work),
+        "matched_accounts": matched_accounts,
+        "averaged_accounts": averaged_accounts,
+    }
+
+
 def calculate_daily_active_span_excel(
     account_input_path: Path,
     post_input_path: Path,
