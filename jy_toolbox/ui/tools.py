@@ -185,7 +185,7 @@ class PostTypeRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_帖子类型占比.xlsx")))
@@ -198,7 +198,7 @@ class PostTypeRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -324,7 +324,7 @@ class AveragePostLengthTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_平均发帖长度.xlsx")))
@@ -337,7 +337,7 @@ class AveragePostLengthTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -467,7 +467,7 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_平均原创单帖互动数.xlsx")))
@@ -480,7 +480,7 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -598,7 +598,7 @@ class DailyActiveSpanTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_日均在线活跃时段跨度.xlsx")))
@@ -608,7 +608,7 @@ class DailyActiveSpanTool(BaseToolFrame):
         path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -729,7 +729,7 @@ class ActiveDayRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_活跃天数占比.xlsx")))
@@ -742,7 +742,7 @@ class ActiveDayRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -870,7 +870,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_附加观点转发率.xlsx")))
@@ -883,7 +883,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_output(self) -> None:
@@ -1024,7 +1024,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_媒体阵营分布.xlsx")))
@@ -1037,7 +1037,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_dictionary_input(self) -> None:
@@ -1190,7 +1190,7 @@ class PostThemeRatioTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
             self.output_var.set(str(p.with_name(f"{p.stem}_帖子主题占比.xlsx")))
@@ -1203,7 +1203,7 @@ class PostThemeRatioTool(BaseToolFrame):
         )
         if path:
             self.post_input_var.set(path)
-            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
             self.save_state()
 
     def choose_dictionary_input(self) -> None:
@@ -1334,7 +1334,7 @@ class SentimentExpressionTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path); self.output_var.set(str(p.with_name(f"{p.stem}_情感表达统计.xlsx")))
         self.save_state()
@@ -1345,7 +1345,7 @@ class SentimentExpressionTool(BaseToolFrame):
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
-            self.post_input_var.set(path); self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var); self.save_state()
+            self.post_input_var.set(path); self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var); self.save_state()
 
     def choose_dictionary_input(self) -> None:
         path = filedialog.askopenfilename(title="选择情感表达字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
@@ -1464,7 +1464,7 @@ class StanceTendencyTool(BaseToolFrame):
         if not path:
             return
         self.account_input_var.set(path)
-        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path); self.output_var.set(str(p.with_name(f"{p.stem}_立场倾向统计.xlsx")))
         self.save_state()
@@ -1475,7 +1475,7 @@ class StanceTendencyTool(BaseToolFrame):
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
-            self.post_input_var.set(path); self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var); self.save_state()
+            self.post_input_var.set(path); self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var); self.save_state()
 
     def choose_dictionary_input(self) -> None:
         path = filedialog.askopenfilename(title="选择立场倾向字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
