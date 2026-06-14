@@ -970,3 +970,160 @@ def calculate_stance_tendency_excel(
         "matched_posts": len(matched_work),
         "stance_accounts": stance_accounts,
     }
+
+class _KeywordMatcher:
+    def __init__(self, keywords: list[str]) -> None:
+        self._next: list[dict[str, int]] = [{}]
+        self._fail: list[int] = [0]
+        self._terminal: list[bool] = [False]
+        for keyword in keywords:
+            state = 0
+            for char in keyword:
+                nxt = self._next[state].get(char)
+                if nxt is None:
+                    nxt = len(self._next)
+                    self._next[state][char] = nxt
+                    self._next.append({})
+                    self._fail.append(0)
+                    self._terminal.append(False)
+                state = nxt
+            self._terminal[state] = True
+
+        from collections import deque
+
+        queue: deque[int] = deque()
+        for child in self._next[0].values():
+            queue.append(child)
+        while queue:
+            current = queue.popleft()
+            if self._terminal[self._fail[current]]:
+                self._terminal[current] = True
+            for char, child in self._next[current].items():
+                fail_state = self._fail[current]
+                while fail_state and char not in self._next[fail_state]:
+                    fail_state = self._fail[fail_state]
+                self._fail[child] = self._next[fail_state].get(char, 0)
+                queue.append(child)
+
+    def contains(self, text: Any) -> bool:
+        if not _is_non_empty_cell(text):
+            return False
+        state = 0
+        for char in str(text):
+            while state and char not in self._next[state]:
+                state = self._fail[state]
+            state = self._next[state].get(char, 0)
+            if self._terminal[state]:
+                return True
+        return False
+
+
+def _load_first_column_keywords(dictionary_df: Any) -> list[str]:
+    if len(dictionary_df.columns) < 1:
+        return []
+    first_column = dictionary_df.columns[0]
+    seen: set[str] = set()
+    keywords: list[str] = []
+    for value in dictionary_df[first_column]:
+        keyword = _normalized_key(value)
+        if keyword and keyword not in seen:
+            seen.add(keyword)
+            keywords.append(keyword)
+    return keywords
+
+
+def _combine_post_text(row: Any) -> str:
+    parts = []
+    for column in ("标题", "帖子正文"):
+        if column in row and _is_non_empty_cell(row.get(column)):
+            parts.append(str(row.get(column)))
+    return "\n".join(parts)
+
+
+def calculate_sensitive_topic_participation_rate_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    dictionary_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    dictionary_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+    if not dictionary_input_path.exists():
+        raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(25, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+    if progress is not None:
+        progress(40, "正在后台读取敏感话题关键词字典 Excel……")
+    dictionary_df = read_excel_with_passwords(dictionary_input_path, passwords, dictionary_sheet_name, header=None)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    keywords = _load_first_column_keywords(dictionary_df)
+    if not keywords:
+        raise ValueError("字典 Excel 第一列没有可用关键词。")
+
+    if progress is not None:
+        progress(55, f"正在构建 {len(keywords)} 个关键词的快速匹配索引……")
+    matcher = _KeywordMatcher(keywords)
+
+    if progress is not None:
+        progress(65, "正在扫描贴文标题和正文中的敏感话题关键词……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work = work[work["__homepage_key__"] != ""].copy()
+    work["__post_text__"] = work.apply(_combine_post_text, axis=1)
+    work["__is_sensitive_topic__"] = work["__post_text__"].map(matcher.contains)
+
+    if progress is not None:
+        progress(78, "正在按账号汇总敏感话题参与率……")
+    total_counts_by_homepage = work.groupby("__homepage_key__", sort=False).size().to_dict()
+    sensitive_counts_by_homepage = (
+        work[work["__is_sensitive_topic__"]].groupby("__homepage_key__", sort=False).size().to_dict()
+    )
+    ratios_by_homepage = {
+        str(homepage): round(int(sensitive_counts_by_homepage.get(homepage, 0)) / int(total) * 100, 2)
+        for homepage, total in total_counts_by_homepage.items()
+        if int(total) > 0
+    }
+
+    if progress is not None:
+        progress(86, "正在写回账号表敏感话题参与率列……")
+    output_column = "敏感话题参与率（%）"
+    output_df = account_df.copy()
+    if output_column in output_df.columns:
+        output_df = output_df.drop(columns=[output_column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df[output_column] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(94, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(total_counts_by_homepage)).sum())
+    rated_accounts = int(output_df[output_column].map(_is_non_empty_cell).sum())
+    sensitive_posts = int(work["__is_sensitive_topic__"].sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "dictionary_keywords": len(keywords),
+        "matched_accounts": matched_accounts,
+        "sensitive_posts": sensitive_posts,
+        "rated_accounts": rated_accounts,
+    }

@@ -18,6 +18,7 @@ from jy_toolbox.ui.tools import (
     PostDedupTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
+    SensitiveTopicParticipationRateTool,
     SentimentExpressionTool,
     SourceMediaCampRatioTool,
     StanceTendencyTool,
@@ -90,6 +91,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostThemeRatioTool(
                     parent, app, state, app.get_tool_description("post_theme_ratio")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="sensitive_topic_participation_rate",
+                name="敏感话题参与率（%）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel、贴文 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
+                    "用字典 sheet 第一列（无标题）关键词快速扫描贴文“标题”和“帖子正文”，"
+                    "按账号计算包含任一关键词的贴文数占该账号全部贴文数的百分比，并在账号表最后新增“敏感话题参与率（%）”列。"
+                ),
+                factory=lambda parent, app, state: SensitiveTopicParticipationRateTool(
+                    parent, app, state, app.get_tool_description("sensitive_topic_participation_rate")
                 ),
             )
         )

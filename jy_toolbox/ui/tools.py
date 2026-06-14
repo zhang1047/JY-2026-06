@@ -14,6 +14,7 @@ from jy_toolbox.services.analytics import (
     calculate_daily_active_span_excel,
     calculate_post_type_ratios_excel,
     calculate_post_theme_ratios_excel,
+    calculate_sensitive_topic_participation_rate_excel,
     calculate_sentiment_expression_excel,
     calculate_source_media_camp_ratios_excel,
     calculate_stance_tendency_excel,
@@ -1264,6 +1265,93 @@ class PostThemeRatioTool(BaseToolFrame):
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
         self.run_in_background(task, on_success, start_message="已开始后台统计帖子主题占比……")
+
+
+class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
+    OUTPUT_COLUMN = "敏感话题参与率（%）"
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, app, state, description)
+        self.status_var.set("请选择账号 Excel、贴文 Excel 和敏感话题关键词字典 Excel 后开始统计。")
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text="敏感话题参与率（%）", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "关键词字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
+        self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
+        self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var, hint="选择第一列为关键词、无标题的 sheet")
+        form.columnconfigure(1, weight=1)
+
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择账号 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if not path:
+            return
+        self.account_input_var.set(path)
+        self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
+        if not self.output_var.get().strip():
+            p = Path(path)
+            self.output_var.set(str(p.with_name(f"{p.stem}_敏感话题参与率.xlsx")))
+        self.save_state()
+
+    def choose_dictionary_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择敏感话题关键词字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.dictionary_input_var.set(path)
+            self.populate_sheets_async(path, self.dictionary_sheet_combo, self.dictionary_sheet_var)
+            self.save_state()
+
+    def save_state(self) -> None:
+        self.app.config.set_tool_state("sensitive_topic_participation_rate", {
+            "account_input_path": self.account_input_var.get().strip(),
+            "post_input_path": self.post_input_var.get().strip(),
+            "dictionary_input_path": self.dictionary_input_var.get().strip(),
+            "output_path": self.output_var.get().strip(),
+            "account_sheet_name": self.account_sheet_var.get().strip(),
+            "post_sheet_name": self.post_sheet_var.get().strip(),
+            "dictionary_sheet_name": self.dictionary_sheet_var.get().strip(),
+        })
+        self.status_var.set("当前工具填写内容已保存。")
+
+    def run(self) -> None:
+        account_input_path = self.account_input_var.get().strip()
+        post_input_path = self.post_input_var.get().strip()
+        dictionary_input_path = self.dictionary_input_var.get().strip()
+        output_path = self.output_var.get().strip()
+        account_sheet_name = self.account_sheet_var.get().strip() or 0
+        post_sheet_name = self.post_sheet_var.get().strip() or 0
+        dictionary_sheet_name = self.dictionary_sheet_var.get().strip() or 0
+        if not account_input_path:
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
+        if not post_input_path:
+            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+        if not dictionary_input_path:
+            messagebox.showwarning("提示", "请选择敏感话题关键词字典 Excel。", parent=self); return
+        if not output_path:
+            messagebox.showwarning("提示", "请选择输出 Excel。", parent=self); return
+        self.save_state()
+
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            return calculate_sensitive_topic_participation_rate_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
+
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，关键词 {dictionary_keywords} 个，匹配账号 {matched_accounts} 个，敏感话题贴文 {sensitive_posts} 行，已写入 {rated_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        self.run_in_background(task, on_success, start_message="已开始后台统计敏感话题参与率……")
 
 
 class SentimentExpressionTool(BaseToolFrame):
