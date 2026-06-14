@@ -71,18 +71,18 @@ def list_excel_sheet_names_with_passwords(path: Path, passwords: list[str]) -> l
             raise RuntimeError(f"{encrypted_error} 原始错误：{first_error}") from encrypted_error
 
 
-def read_excel_with_passwords(path: Path, passwords: list[str], sheet_name: str | int) -> Any:
+def read_excel_with_passwords(path: Path, passwords: list[str], sheet_name: str | int, **read_excel_kwargs: Any) -> Any:
     """读取普通或加密 Excel。加密文件会按密码本顺序尝试。"""
     import pandas as pd
 
     try:
-        return pd.read_excel(path, sheet_name=sheet_name)
+        return pd.read_excel(path, sheet_name=sheet_name, **read_excel_kwargs)
     except Exception as first_error:  # noqa: BLE001 - 需要判断是否可用密码继续尝试
         try:
             return _read_decrypted_excel(
                 path,
                 passwords,
-                lambda tmp_name: pd.read_excel(tmp_name, sheet_name=sheet_name),
+                lambda tmp_name: pd.read_excel(tmp_name, sheet_name=sheet_name, **read_excel_kwargs),
                 "读取失败",
             )
         except RuntimeError as encrypted_error:
