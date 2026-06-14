@@ -96,6 +96,8 @@ class BaseToolFrame(ttk.Frame):
         hint: str = "导入 Excel 后自动识别 sheet，下拉选择",
     ) -> ttk.Combobox:
         """增加统一的 sheet 下拉框，供当前和后续 Excel 工具复用。"""
+        if label in {"账号表工作表：", "贴文表工作表："}:
+            hint = "默认读取第一个 sheet（不自动识别）"
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
         combo = ttk.Combobox(parent, textvariable=var, state="readonly", values=())
         combo.grid(row=row, column=1, sticky="ew", padx=10, pady=8)
@@ -165,12 +167,25 @@ class BaseToolFrame(ttk.Frame):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def use_first_sheet_by_default(self, combo: ttk.Combobox, var: tk.StringVar) -> None:
+        """账号表和贴文表不识别工作表，始终让读取逻辑使用第一个 sheet。"""
+        if not self._widget_exists(combo):
+            return
+        combo["values"] = ()
+        var.set("")
+
     def load_configured_sheets_async(self, *, show_errors: bool = False) -> None:
         """按通用命名约定自动识别当前工具已填写的 Excel 工作表。"""
+        first_sheet_mappings = (
+            ("account_sheet_combo", "account_sheet_var"),
+            ("post_sheet_combo", "post_sheet_var"),
+        )
+        for combo_attr, sheet_attr in first_sheet_mappings:
+            if all(hasattr(self, attr) for attr in (combo_attr, sheet_attr)):
+                self.use_first_sheet_by_default(getattr(self, combo_attr), getattr(self, sheet_attr))
+
         mappings = (
             ("input_var", "sheet_combo", "sheet_var"),
-            ("account_input_var", "account_sheet_combo", "account_sheet_var"),
-            ("post_input_var", "post_sheet_combo", "post_sheet_var"),
             ("dictionary_input_var", "dictionary_sheet_combo", "dictionary_sheet_var"),
         )
         for path_attr, combo_attr, sheet_attr in mappings:
