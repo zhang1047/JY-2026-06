@@ -238,6 +238,84 @@ def calculate_average_post_length_excel(
     }
 
 
+
+def calculate_daily_active_span_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    import pandas as pd
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在解析贴文发布时间并筛选单日 2 条及以上的发帖日期……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce")
+    work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
+    work["__post_date__"] = work["__post_datetime__"].dt.date
+
+    if progress is not None:
+        progress(72, "正在按账号计算日均在线活跃时段跨度……")
+    span_by_homepage: dict[str, float] = {}
+    qualified_days_count = 0
+    for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
+        daily_spans: list[float] = []
+        for _, day_rows in homepage_rows.groupby("__post_date__", sort=False):
+            if len(day_rows) < 2:
+                continue
+            span_hours = (day_rows["__post_datetime__"].max() - day_rows["__post_datetime__"].min()).total_seconds() / 3600
+            daily_spans.append(float(span_hours))
+        if daily_spans:
+            span_by_homepage[str(homepage)] = round(sum(daily_spans) / len(daily_spans), 2)
+            qualified_days_count += len(daily_spans)
+
+    if progress is not None:
+        progress(84, "正在写回账号表日均在线活跃时段跨度列……")
+    output_df = account_df.copy()
+    output_column = "日均在线活跃时段跨度（小时/天）"
+    if output_column in output_df.columns:
+        output_df = output_df.drop(columns=[output_column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df[output_column] = account_keys.map(lambda key: span_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(work["__homepage_key__"])).sum())
+    spanned_accounts = int(output_df[output_column].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "valid_time_posts": len(work),
+        "matched_accounts": matched_accounts,
+        "qualified_days": qualified_days_count,
+        "spanned_accounts": spanned_accounts,
+    }
+
 def calculate_active_day_ratio_excel(
     account_input_path: Path,
     post_input_path: Path,
