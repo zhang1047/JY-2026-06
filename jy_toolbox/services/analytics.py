@@ -1097,7 +1097,7 @@ def calculate_sensitive_topic_participation_rate_excel(
         work[work["__is_sensitive_topic__"]].groupby("__homepage_key__", sort=False).size().to_dict()
     )
     ratios_by_homepage = {
-        str(homepage): round(int(sensitive_counts_by_homepage.get(homepage, 0)) / int(total) * 100, 2)
+        str(homepage): f"{int(sensitive_counts_by_homepage.get(homepage, 0)) / int(total) * 100:.2f}%"
         for homepage, total in total_counts_by_homepage.items()
         if int(total) > 0
     }
