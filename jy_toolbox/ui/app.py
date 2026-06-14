@@ -12,6 +12,7 @@ from jy_toolbox.ui.dialogs import PasswordBookDialog, ToolListDialog
 from jy_toolbox.ui.tools import (
     ActiveDayRatioTool,
     AddedOpinionShareRateTool,
+    AverageDailyOriginalPostsTool,
     AverageOriginalPostInteractionsTool,
     AveragePostLengthTool,
     DailyActiveSpanTool,
@@ -182,6 +183,22 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: AveragePostLengthTool(
                     parent, app, state, app.get_tool_description("average_post_length")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="average_daily_original_posts",
+                name="日均原创量（条）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "按每个账号最早到最晚的贴文发布时间计算统计时间范围天数，"
+                    "仅排除贴文表“创作类型”为 share 的转发帖后统计原创贴文数量，"
+                    "用原创贴文数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
+                ),
+                factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
+                    parent, app, state, app.get_tool_description("average_daily_original_posts")
                 ),
             )
         )
