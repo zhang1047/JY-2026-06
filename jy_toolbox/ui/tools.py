@@ -9,6 +9,7 @@ from jy_toolbox.core.constants import *
 from jy_toolbox.services.analytics import (
     calculate_active_day_ratio_excel,
     calculate_added_opinion_share_rate_excel,
+    calculate_average_original_post_interactions_excel,
     calculate_average_post_length_excel,
     calculate_daily_active_span_excel,
     calculate_post_type_ratios_excel,
@@ -404,6 +405,150 @@ class AveragePostLengthTool(BaseToolFrame):
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
         self.run_in_background(task, on_success, start_message="已开始后台统计平均发帖长度……")
+
+
+class AverageOriginalPostInteractionsTool(BaseToolFrame):
+    ACCOUNT_URL_COLUMN = "FB主页"
+    POST_URL_COLUMN = "主页url"
+    CREATION_TYPE_COLUMN = "创作类型"
+    LIKE_COLUMN = "点赞数"
+    SHARE_COLUMN = "分享数"
+    COMMENT_COLUMN = "评论数"
+    OUTPUT_COLUMN = "平均原创单帖互动数（条）"
+    REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, CREATION_TYPE_COLUMN, LIKE_COLUMN, SHARE_COLUMN, COMMENT_COLUMN]
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
+        super().__init__(parent, app, state, description)
+        self.account_input_var = tk.StringVar(value=state.get("account_input_path", ""))
+        self.post_input_var = tk.StringVar(value=state.get("post_input_path", ""))
+        self.output_var = tk.StringVar(value=state.get("output_path", ""))
+        self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
+        self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self._build_form()
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text="平均原创单帖互动数（条）", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
+        self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        form.columnconfigure(1, weight=1)
+
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+        self.add_progress_bar(status_card)
+        self.load_configured_sheets_async()
+
+    def _path_row(
+        self,
+        parent: ttk.LabelFrame,
+        row: int,
+        label: str,
+        var: tk.StringVar,
+        command: Callable[[], None],
+    ) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择账号 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        self.account_input_var.set(path)
+        self.populate_sheets_async(path, self.account_sheet_combo, self.account_sheet_var)
+        if not self.output_var.get().strip():
+            p = Path(path)
+            self.output_var.set(str(p.with_name(f"{p.stem}_平均原创单帖互动数.xlsx")))
+        self.save_state()
+
+    def choose_post_input(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择贴文 Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
+        )
+        if path:
+            self.post_input_var.set(path)
+            self.populate_sheets_async(path, self.post_sheet_combo, self.post_sheet_var)
+            self.save_state()
+
+    def choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="保存账号表处理结果",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+        )
+        if path:
+            self.output_var.set(path)
+            self.save_state()
+
+    def save_state(self) -> None:
+        self.app.config.set_tool_state(
+            "average_original_post_interactions",
+            {
+                "account_input_path": self.account_input_var.get().strip(),
+                "post_input_path": self.post_input_var.get().strip(),
+                "output_path": self.output_var.get().strip(),
+                "account_sheet_name": self.account_sheet_var.get().strip(),
+                "post_sheet_name": self.post_sheet_var.get().strip(),
+            },
+        )
+        self.status_var.set("当前工具填写内容已保存。")
+
+    def run(self) -> None:
+        account_input_path = self.account_input_var.get().strip()
+        post_input_path = self.post_input_var.get().strip()
+        output_path = self.output_var.get().strip()
+        account_sheet_name = self.account_sheet_var.get().strip() or 0
+        post_sheet_name = self.post_sheet_var.get().strip() or 0
+        if not account_input_path:
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
+            return
+        if not post_input_path:
+            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            return
+        if not output_path:
+            messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
+            return
+        self.save_state()
+
+        def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
+            return calculate_average_original_post_interactions_excel(
+                Path(account_input_path),
+                Path(post_input_path),
+                Path(output_path),
+                self.app.config.data.get("passwords", []),
+                account_sheet_name,
+                post_sheet_name,
+                progress,
+            )
+
+        def on_success(result: dict[str, int]) -> None:
+            self.status_var.set(
+                "完成：账号 {accounts} 行，贴文 {posts} 行，其中原创帖 {original_posts} 行，已匹配 {matched_accounts} 个账号，"
+                "已写入 {averaged_accounts} 个账号。输出：{output}".format(
+                    accounts=result["accounts"],
+                    posts=result["posts"],
+                    matched_accounts=result["matched_accounts"],
+                    averaged_accounts=result["averaged_accounts"],
+                    original_posts=result["original_posts"],
+                    output=output_path,
+                )
+            )
+            messagebox.showinfo("完成", self.status_var.get(), parent=self)
+
+        self.run_in_background(task, on_success, start_message="已开始后台统计平均原创单帖互动数……")
 
 
 class DailyActiveSpanTool(BaseToolFrame):

@@ -12,6 +12,7 @@ from jy_toolbox.ui.dialogs import PasswordBookDialog, ToolListDialog
 from jy_toolbox.ui.tools import (
     ActiveDayRatioTool,
     AddedOpinionShareRateTool,
+    AverageOriginalPostInteractionsTool,
     AveragePostLengthTool,
     DailyActiveSpanTool,
     PostDedupTool,
@@ -164,6 +165,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: AveragePostLengthTool(
                     parent, app, state, app.get_tool_description("average_post_length")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="average_original_post_interactions",
+                name="平均原创单帖互动数（条）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "仅统计贴文表“创作类型”为 common 的原创帖，将每帖“点赞数”“评论数”“分享数”相加得到互动数，"
+                    "按账号计算平均原创单帖互动数，并在账号表最后新增“平均原创单帖互动数（条）”列。"
+                ),
+                factory=lambda parent, app, state: AverageOriginalPostInteractionsTool(
+                    parent, app, state, app.get_tool_description("average_original_post_interactions")
                 ),
             )
         )
