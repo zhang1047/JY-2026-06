@@ -413,6 +413,7 @@ class ActiveDayRatioTool(BaseToolFrame):
     POST_SPAN_DAYS_COLUMN = "帖子时间跨度天数"
     ACTIVE_DAYS_COLUMN = "活跃天数"
     OUTPUT_COLUMN = "活跃天数占比"
+    AVERAGE_ACTIVE_SPAN_HOURS_COLUMN = "日均在线活跃时段跨度（小时/天）"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
@@ -538,7 +539,8 @@ class ActiveDayRatioTool(BaseToolFrame):
                 "已匹配 {matched_accounts} 个账号，已写入帖子数量 {post_count_accounts} 个账号，"
                 "已写入帖子时间跨度天数 {active_span_accounts} 个账号，"
                 "已写入活跃天数 {active_days_accounts} 个账号，"
-                "已写入活跃天数占比 {active_ratio_accounts} 个账号。输出：{output}".format(
+                "已写入活跃天数占比 {active_ratio_accounts} 个账号，"
+                "已写入日均在线活跃时段跨度 {average_active_span_hours_accounts} 个账号。输出：{output}".format(
                     **result,
                     output=output_path,
                 )

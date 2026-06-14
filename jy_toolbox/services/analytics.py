@@ -283,6 +283,7 @@ def calculate_active_day_ratio_excel(
     span_days_by_homepage: dict[str, int] = {}
     active_days_by_homepage: dict[str, int] = {}
     ratios_by_homepage: dict[str, str] = {}
+    average_active_span_hours_by_homepage: dict[str, float] = {}
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
         first_date = homepage_rows["__post_date__"].min()
         last_date = homepage_rows["__post_date__"].max()
@@ -293,14 +294,28 @@ def calculate_active_day_ratio_excel(
         active_days_by_homepage[homepage_key] = active_days
         ratios_by_homepage[homepage_key] = _format_single_percentage(active_days, span_days)
 
+        daily_spans: list[float] = []
+        for _, date_rows in homepage_rows.groupby("__post_date__", sort=False):
+            if len(date_rows) < 2:
+                continue
+            day_span_hours = (
+                date_rows["__post_datetime__"].max() - date_rows["__post_datetime__"].min()
+            ).total_seconds() / 3600
+            daily_spans.append(float(day_span_hours))
+        if daily_spans:
+            average_active_span_hours_by_homepage[homepage_key] = round(sum(daily_spans) / len(daily_spans), 2)
+
     if progress is not None:
-        progress(84, "正在写回账号表帖子数量、帖子时间跨度天数、活跃天数和活跃天数占比列……")
+        progress(84, "正在写回账号表帖子数量、帖子时间跨度天数、活跃天数、活跃天数占比和日均在线活跃时段跨度列……")
     output_df = account_df.copy()
     account_keys = output_df["FB主页"].map(_normalized_key)
     output_df["帖子数量"] = account_keys.map(lambda key: int(post_counts_by_homepage.get(key, 0)))
     output_df["帖子时间跨度天数"] = account_keys.map(lambda key: span_days_by_homepage.get(key, ""))
     output_df["活跃天数"] = account_keys.map(lambda key: active_days_by_homepage.get(key, ""))
     output_df["活跃天数占比"] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+    output_df["日均在线活跃时段跨度（小时/天）"] = account_keys.map(
+        lambda key: average_active_span_hours_by_homepage.get(key, "")
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if progress is not None:
@@ -312,6 +327,9 @@ def calculate_active_day_ratio_excel(
     active_span_accounts = int(output_df["帖子时间跨度天数"].map(_is_non_empty_cell).sum())
     active_days_accounts = int(output_df["活跃天数"].map(_is_non_empty_cell).sum())
     active_ratio_accounts = int(output_df["活跃天数占比"].map(_is_non_empty_cell).sum())
+    average_active_span_hours_accounts = int(
+        output_df["日均在线活跃时段跨度（小时/天）"].map(_is_non_empty_cell).sum()
+    )
     return {
         "accounts": len(account_df),
         "posts": len(post_df),
@@ -321,6 +339,7 @@ def calculate_active_day_ratio_excel(
         "active_span_accounts": active_span_accounts,
         "active_days_accounts": active_days_accounts,
         "active_ratio_accounts": active_ratio_accounts,
+        "average_active_span_hours_accounts": average_active_span_hours_accounts,
     }
 
 def _format_category_ratios(counts: dict[str, int]) -> str:

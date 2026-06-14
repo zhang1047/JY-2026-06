@@ -128,8 +128,9 @@ class ToolboxApp:
                 description=(
                     "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
                     "按每个账号最早到最晚的贴文发布时间计算账号发帖时间范围天数，"
-                    "再用该账号实际发帖日期数除以时间范围天数，并在账号表最后依次新增“帖子数量”、"
-                    "“帖子时间跨度天数”、“活跃天数”和“活跃天数占比”列。"
+                    "再用该账号实际发帖日期数除以时间范围天数；同时筛选每天发帖 2 条及以上的日期，"
+                    "计算每天最早到最晚发帖时间的小时跨度并取平均值。账号表最后依次新增“帖子数量”、"
+                    "“帖子时间跨度天数”、“活跃天数”、“活跃天数占比”和“日均在线活跃时段跨度（小时/天）”列。"
                 ),
                 factory=lambda parent, app, state: ActiveDayRatioTool(
                     parent, app, state, app.get_tool_description("active_day_ratio")
