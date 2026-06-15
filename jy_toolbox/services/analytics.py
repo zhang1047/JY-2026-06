@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 from typing import Any, Callable
 
+from jy_toolbox.core.chinese import convert_chinese_text
 from jy_toolbox.services.excel_io import read_excel_with_passwords
 
 SENTIMENT_VALUES = ("正面", "负面", "中性")
@@ -1376,6 +1377,7 @@ def calculate_custom_keyword_frequencies_excel(
     keywords: list[str],
     account_sheet_name: str | int = 0,
     post_sheet_name: str | int = 0,
+    ignore_chinese_script: bool = False,
     progress: Callable[[float, str | None], None] | None = None,
 ) -> dict[str, int]:
     if not account_input_path.exists():
@@ -1387,6 +1389,16 @@ def calculate_custom_keyword_frequencies_excel(
     normalized_keywords = [keyword for keyword in normalized_keywords if keyword]
     if not normalized_keywords:
         raise ValueError("请至少新增 1 个可用关键词。")
+    keyword_variants = {
+        keyword: list(dict.fromkeys((
+            keyword,
+            convert_chinese_text(keyword, to_traditional=True),
+            convert_chinese_text(keyword, to_traditional=False),
+        )))
+        if ignore_chinese_script
+        else [keyword]
+        for keyword in normalized_keywords
+    }
 
     if progress is not None:
         progress(10, "正在后台读取账号 Excel……")
@@ -1414,7 +1426,7 @@ def calculate_custom_keyword_frequencies_excel(
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
         joined_text = "\n".join(str(value) for value in homepage_rows["__post_text__"] if _is_non_empty_cell(value))
         counts_by_homepage[str(homepage)] = {
-            keyword: int(joined_text.count(keyword))
+            keyword: int(sum(joined_text.count(variant) for variant in keyword_variants[keyword]))
             for keyword in normalized_keywords
         }
 
