@@ -227,8 +227,8 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "按每个账号最早到最晚的贴文发布时间计算间隔周数，"
-                    "用该账号总发帖数除以间隔周数，并在账号表最后新增“每周发布帖子频率（次）”列。"
+                    "按每个账号最早到最晚的贴文发布日期计算统计自然周数（含首尾日期，向上取整且最少 1 周），"
+                    "用该账号总发帖数除以统计周数，并在账号表最后新增“每周发布帖子频率（次）”列。"
                 ),
                 factory=lambda parent, app, state: WeeklyPostFrequencyTool(
                     parent, app, state, app.get_tool_description("weekly_post_frequency")

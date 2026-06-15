@@ -598,11 +598,17 @@ def calculate_weekly_post_frequency_excel(
         progress(74, "正在按账号计算每周发布帖子频率……")
     frequency_by_homepage: dict[str, float] = {}
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
-        first_time = homepage_rows["__post_datetime__"].min()
-        last_time = homepage_rows["__post_datetime__"].max()
-        span_weeks = (last_time - first_time).total_seconds() / (7 * 24 * 3600)
-        if span_weeks <= 0:
+        first_date = homepage_rows["__post_datetime__"].min().date()
+        last_date = homepage_rows["__post_datetime__"].max().date()
+        span_days = (last_date - first_date).days + 1
+        if span_days <= 0:
             continue
+        # Use inclusive calendar weeks instead of exact seconds between the
+        # first and last post. Exact-second spans can be only a few minutes for
+        # accounts with one burst of posts, which inflates the weekly rate into
+        # thousands. A minimum one-week denominator keeps short observation
+        # windows interpretable (e.g. one post in the data means 1 time/week).
+        span_weeks = max(1, (span_days + 6) // 7)
         frequency_by_homepage[str(homepage)] = round(len(homepage_rows) / span_weeks, 2)
 
     if progress is not None:
