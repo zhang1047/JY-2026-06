@@ -41,6 +41,7 @@ class ToolboxApp:
         self.root = tk.Tk()
         self.root.title(APP_NAME)
         self.root.geometry("1080x720")
+        self.root.minsize(1080, 720)
         enable_light_title_bar(self.root)
         self.config = ConfigStore()
         self.tools: dict[str, ToolDefinition] = {}
@@ -771,6 +772,7 @@ class GroupRunFrame(BaseToolFrame):
         self.custom_keyword_text_vars: dict[str, tk.StringVar] = {}
         self.custom_keyword_input_vars: dict[str, tk.StringVar] = {}
         self.custom_ignore_script_vars: dict[str, tk.BooleanVar] = {}
+        self.dictionary_loading_var = tk.StringVar(value="")
         self._batch_frames: list[BaseToolFrame] = []
         self._batch_index = 0
         self._current_account_path = ""
@@ -784,7 +786,11 @@ class GroupRunFrame(BaseToolFrame):
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
-        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+        if label == "字典 Excel：":
+            ttk.Label(parent, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).grid(row=row, column=2, sticky="e", padx=(10, 4), pady=8)
+            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=(4, 10), pady=8)
+        else:
+            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=10, pady=8)
 
     def _tool_needs_dictionary_sheet(self, key: str) -> bool:
         return key in {
@@ -805,7 +811,7 @@ class GroupRunFrame(BaseToolFrame):
     def _add_custom_keyword_setting_row(self, parent: tk.Widget, key: str) -> None:
         state = self.app.config.get_tool_state(key)
         keywords = [str(item).strip() for item in state.get("keywords", []) if str(item).strip()]
-        text_var = tk.StringVar(value="\n".join(keywords))
+        text_var = tk.StringVar(value="、".join(keywords))
         input_var = tk.StringVar(value="")
         ignore_var = tk.BooleanVar(value=bool(state.get("ignore_chinese_script", False)))
         self.custom_keyword_text_vars[key] = text_var
@@ -831,11 +837,11 @@ class GroupRunFrame(BaseToolFrame):
         box.columnconfigure(1, weight=1)
 
     def _group_keywords(self, key: str) -> list[str]:
-        raw = self.custom_keyword_text_vars[key].get().replace("，", "\n").replace(",", "\n")
-        return list(dict.fromkeys(item.strip() for item in raw.splitlines() if item.strip()))
+        raw = self.custom_keyword_text_vars[key].get().replace("，", "、").replace(",", "、").replace("\n", "、")
+        return list(dict.fromkeys(item.strip() for item in raw.split("、") if item.strip()))
 
     def _set_group_keywords(self, key: str, keywords: list[str]) -> None:
-        value = "\n".join(keywords)
+        value = "、".join(keywords)
         self.custom_keyword_text_vars[key].set(value)
         for widget in self._keyword_text_widgets():
             if getattr(widget, "_tool_key", None) == key:
@@ -889,19 +895,40 @@ class GroupRunFrame(BaseToolFrame):
         scrollbar.pack(side="right", fill="y")
         tools_body.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=event.width))
-        canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1 * (event.delta / 120)), "units") if canvas.winfo_ismapped() else None)
+        def on_tools_mousewheel(event: tk.Event) -> str:
+            pointer_x = self.winfo_pointerx()
+            pointer_y = self.winfo_pointery()
+            x = canvas.winfo_rootx()
+            y = canvas.winfo_rooty()
+            if not (x <= pointer_x < x + canvas.winfo_width() and y <= pointer_y < y + canvas.winfo_height()):
+                return ""
+            delta = 0
+            if getattr(event, "num", None) == 4:
+                delta = -1
+            elif getattr(event, "num", None) == 5:
+                delta = 1
+            elif event.delta:
+                delta = -int(event.delta / 120)
+            if delta:
+                canvas.yview_scroll(delta, "units")
+            return "break"
+        canvas.bind_all("<MouseWheel>", on_tools_mousewheel)
+        canvas.bind_all("<Button-4>", on_tools_mousewheel)
+        canvas.bind_all("<Button-5>", on_tools_mousewheel)
         for index, key in enumerate(self.tool_keys, start=1):
             tool = self.app.tools[key]
             row = ttk.Frame(tools_body, style="Card.TFrame")
             row.pack(fill="x", pady=4)
-            ttk.Label(row, text=f"{index}. {tool.name}", background=COLOR_SURFACE).pack(side="left", fill="x", expand=True)
+            row.columnconfigure(1, weight=1)
+            ttk.Label(row, text=f"{index}. {tool.name}", background=COLOR_SURFACE).grid(row=0, column=0, sticky="w", padx=(0, 8))
             if self._tool_needs_dictionary_sheet(key):
+                ttk.Label(row, text="- - - - - -", background=COLOR_SURFACE, foreground=COLOR_MUTED).grid(row=0, column=1, sticky="ew", padx=(0, 8))
+                ttk.Label(row, text="字典 sheet：", background=COLOR_SURFACE, foreground=COLOR_MUTED).grid(row=0, column=2, sticky="e", padx=(0, 4))
                 var = tk.StringVar(value=self.app.config.get_tool_state(key).get("dictionary_sheet_name", ""))
                 self.dictionary_sheet_vars[key] = var
                 combo = ttk.Combobox(row, textvariable=var, state="readonly", values=(), width=22)
                 self.dictionary_sheet_combos[key] = combo
-                combo.pack(side="right")
-                ttk.Label(row, text="字典 sheet：", background=COLOR_SURFACE, foreground=COLOR_MUTED).pack(side="right", padx=(0, 4))
+                combo.grid(row=0, column=3, sticky="e")
             if self._tool_has_extra_group_settings(key):
                 self._add_custom_keyword_setting_row(tools_body, key)
 
@@ -935,8 +962,17 @@ class GroupRunFrame(BaseToolFrame):
         path = filedialog.askopenfilename(title="选择字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.dictionary_input_var.set(path)
+            self.dictionary_loading_var.set("识别sheet名中...")
             for widget in self._dictionary_combos():
                 self.populate_sheets_async(path, widget[1], widget[0], show_errors=True)
+            self._wait_dictionary_sheet_loading()
+
+    def _wait_dictionary_sheet_loading(self) -> None:
+        pending_combo_keys = {id(combo) for _, combo in self._dictionary_combos()}
+        if pending_combo_keys & set(self._sheet_loading_pending):
+            self.after(120, self._wait_dictionary_sheet_loading)
+            return
+        self.dictionary_loading_var.set("")
 
     def _dictionary_combos(self) -> list[tuple[tk.StringVar, ttk.Combobox]]:
         return [(self.dictionary_sheet_vars[key], combo) for key, combo in self.dictionary_sheet_combos.items()]
