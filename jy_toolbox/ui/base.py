@@ -133,12 +133,15 @@ class BaseToolFrame(ttk.Frame):
         var: tk.StringVar,
         *,
         show_errors: bool = True,
+        loading_var: tk.StringVar | None = None,
     ) -> None:
         """在后台识别 Excel sheet，避免大文件在选择文件或切换工具时卡住界面。"""
         if not self._widget_exists(combo):
             return
         if not excel_path:
             combo["values"] = ()
+            if loading_var is not None:
+                loading_var.set("")
             return
 
         combo_key = id(combo)
@@ -146,6 +149,8 @@ class BaseToolFrame(ttk.Frame):
         self._sheet_loading_seq[combo_key] = seq
         combo["values"] = ()
         var.set(var.get().strip())
+        if loading_var is not None:
+            loading_var.set("识别sheet名中...")
         if hasattr(self, "status_var"):
             if not self._sheet_loading_pending:
                 self._sheet_status_before_loading = self.status_var.get()
@@ -160,11 +165,11 @@ class BaseToolFrame(ttk.Frame):
                 )
             except Exception as exc:  # noqa: BLE001 - GUI 顶层需要把错误显示给用户
                 self._schedule_on_ui_thread(
-                    lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, show_errors)
+                    lambda exc=exc: self._finish_sheet_loading_error(combo_key, seq, exc, show_errors, loading_var)
                 )
             else:
                 self._schedule_on_ui_thread(
-                    lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var)
+                    lambda: self._finish_sheet_loading_success(combo_key, seq, sheet_names, combo, var, loading_var)
                 )
 
         threading.Thread(target=worker, daemon=True).start()
@@ -218,10 +223,13 @@ class BaseToolFrame(ttk.Frame):
         sheet_names: list[str],
         combo: ttk.Combobox,
         var: tk.StringVar,
+        loading_var: tk.StringVar | None = None,
     ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
             return
         self._sheet_loading_pending.pop(combo_key, None)
+        if loading_var is not None:
+            loading_var.set("")
         if not self._widget_exists(combo):
             self._update_sheet_loading_status()
             return
@@ -231,11 +239,13 @@ class BaseToolFrame(ttk.Frame):
         self._update_sheet_loading_status()
 
     def _finish_sheet_loading_error(
-        self, combo_key: int, seq: int, exc: Exception, show_errors: bool
+        self, combo_key: int, seq: int, exc: Exception, show_errors: bool, loading_var: tk.StringVar | None = None
     ) -> None:
         if seq != self._sheet_loading_seq.get(combo_key):
             return
         self._sheet_loading_pending.pop(combo_key, None)
+        if loading_var is not None:
+            loading_var.set("")
         if not self._widget_exists(self):
             return
         self._update_sheet_loading_status()
