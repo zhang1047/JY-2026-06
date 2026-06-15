@@ -54,23 +54,30 @@ def _read_decrypted_excel(path: Path, passwords: list[str], reader: Callable[[st
 
 
 def canonicalize_excel_columns(data: Any) -> Any:
-    """Normalize current post-table headers to legacy internal names.
+    """Normalize supported post-table header aliases to the current names.
 
-    The UI and analytics code historically used short column names such as
-    ``帖url`` and ``帖正文``.  Newer exported post tables use ``帖文url`` and
-    ``帖子正文``.  Renaming at the Excel boundary keeps old workbooks working
-    while accepting the current header set everywhere.
+    Current exported post tables use headers such as ``帖子url``,
+    ``帖子正文``, ``帖子发布时间`` and the ``分享帖...`` fields. Older
+    workbooks used shorter ``帖...`` names or ``分享贴...`` names, so we
+    accept those aliases at the Excel boundary while keeping all downstream
+    matching and output on the current header set.
     """
     if not hasattr(data, "columns"):
         return data
     aliases = {
-        "帖文url": "帖url",
-        "帖子正文": "帖正文",
-        "帖文发布时间": "帖发布时间",
-        "分享帖id": "分享贴id",
-        "分享帖账号id": "分享贴账号id",
-        "分享帖账号名": "分享贴账号名",
-        "分享帖账号主页": "分享贴账号主页",
+        "帖url": "帖子url",
+        "帖文url": "帖子url",
+        "贴文url": "帖子url",
+        "帖正文": "帖子正文",
+        "帖文正文": "帖子正文",
+        "贴文正文": "帖子正文",
+        "帖发布时间": "帖子发布时间",
+        "帖文发布时间": "帖子发布时间",
+        "贴文发布时间": "帖子发布时间",
+        "分享贴id": "分享帖id",
+        "分享贴账号id": "分享帖账号id",
+        "分享贴账号名": "分享帖账号名",
+        "分享贴账号主页": "分享帖账号主页",
     }
     rename_map: dict[Any, str] = {}
     existing = set(data.columns)

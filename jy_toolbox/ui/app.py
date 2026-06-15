@@ -65,10 +65,10 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_dedup",
-                name="帖去重",
+                name="帖子去重",
                 default_category="Excel 工具",
                 description=(
-                    "说明：根据“帖url”列去重。若同一 URL 有重复行，会比较“点赞数”“分享数”“评论数”三列的数值总和，"
+                    "说明：根据“帖子url”列去重。若同一 URL 有重复行，会比较“点赞数”“分享数”“评论数”三列的数值总和，"
                     "优先保留总和更大的记录；如果总和相同，则随机保留其中一条。"
                 ),
                 factory=lambda parent, app, state: PostDedupTool(
@@ -79,11 +79,11 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_type_ratio",
-                name="帖类型占比（%）",
+                name="帖子类型占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "按规则统计每个账号文字、图片、视频帖占比，并在账号表最后新增三列占比。"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联，"
+                    "按规则统计每个账号文字、图片、视频帖子占比，并在账号表最后新增三列占比。"
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
@@ -96,8 +96,8 @@ class ToolboxApp:
                 name="高频发帖时段类型",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和发帖时段字典 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "按字典中的“时段类型 / 起始时段 / 结束时段”动态判断每条帖发布时间所属时段，"
+                    "说明：选择账号 Excel、帖子 Excel 和发帖时段字典 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "按字典中的“时段类型 / 起始时段 / 结束时段”动态判断每条帖子发布时间所属时段，"
                     "再按账号写回“高频发帖时段”和“高频发帖类型”。若账号在所有字典时段均有发帖且各时段占比差值不高于 10%，"
                     "则写为混乱型且不写回具体时段。"
                 ),
@@ -109,11 +109,11 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_theme_ratio",
-                name="帖主题占比（%）",
+                name="帖子主题占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“内容偏好”分组，"
+                    "说明：选择账号 Excel、帖子 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与帖子表“主页url”关联，"
+                    "再用帖子表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“内容偏好”分组，"
                     "按账号计算各内容偏好分组占比，并在账号表最后新增“主题占比-分组名”列。"
                 ),
                 factory=lambda parent, app, state: PostThemeRatioTool(
@@ -127,8 +127,8 @@ class ToolboxApp:
                 name="敏感话题参与率（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "用字典 sheet 第一列（无标题）关键词快速扫描帖“标题”和“帖子正文”，"
+                    "说明：选择账号 Excel、帖子 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与帖子表“主页url”关联，"
+                    "用字典 sheet 第一列（无标题）关键词快速扫描帖子“标题”和“帖子正文”，"
                     "按账号计算包含任一关键词的帖数占该账号全部帖数的百分比，并在账号表最后新增“敏感话题参与率（%）”列。"
                 ),
                 factory=lambda parent, app, state: SensitiveTopicParticipationRateTool(
@@ -142,8 +142,8 @@ class ToolboxApp:
                 name="自定义关键词统计",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "在工具界面新增多个关键词后，按每个关键词统计每个账号所有帖标题和正文中的出现次数，"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "在工具界面新增多个关键词后，按每个关键词统计每个账号所有帖子标题和正文中的出现次数，"
                     "并在账号表最后新增“词频-关键词”列。关键词列表支持增删，并可一键转换为繁体或简体。"
                 ),
                 factory=lambda parent, app, state: CustomKeywordFrequencyTool(
@@ -157,8 +157,8 @@ class ToolboxApp:
                 name="情感表达分数&数量占比",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和情感表达字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“情感表达倾向”枚举，"
+                    "说明：选择账号 Excel、帖子 Excel 和情感表达字典 Excel，通过账号表“FB主页”与帖子表“主页url”关联，"
+                    "再用帖子表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“情感表达倾向”枚举，"
                     "按账号计算情感表达分数（正面 +1、负面 -1、中性 0）以及正面、负面、中性的数量和占比。"
                 ),
                 factory=lambda parent, app, state: SentimentExpressionTool(
@@ -172,8 +172,8 @@ class ToolboxApp:
                 name="立场倾向分数&数量占比",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“两岸议题立场倾向”枚举，"
+                    "说明：选择账号 Excel、帖子 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与帖子表“主页url”关联，"
+                    "再用帖子表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“两岸议题立场倾向”枚举，"
                     "按账号计算立场倾向分数（偏蓝 +1、中立 0、偏绿 -1）以及偏蓝、偏绿、中立的数量和占比。"
                 ),
                 factory=lambda parent, app, state: StanceTendencyTool(
@@ -187,7 +187,7 @@ class ToolboxApp:
                 name="日均在线活跃时段跨度（小时/天）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
                     "仅统计每个账号单日发帖 2 条及以上的日期，先按日期计算当天最早到最晚发帖时间间隔（小时），"
                     "再对这些日期的间隔取平均值，并在账号表最后新增“日均在线活跃时段跨度（小时/天）”列。"
                 ),
@@ -202,10 +202,10 @@ class ToolboxApp:
                 name="活跃天数占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "按每个账号最早到最晚的帖发布时间计算账号发帖时间范围天数，"
-                    "再用该账号实际发帖日期数除以时间范围天数，并在账号表最后依次新增“帖数量”、"
-                    "“帖时间跨度天数”、“活跃天数”和“活跃天数占比”列。"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "按每个账号最早到最晚的帖子发布时间计算账号发帖时间范围天数，"
+                    "再用该账号实际发帖日期数除以时间范围天数，并在账号表最后依次新增“帖子数量”、"
+                    "“帖子时间跨度天数”、“活跃天数”和“活跃天数占比”列。"
                 ),
                 factory=lambda parent, app, state: ActiveDayRatioTool(
                     parent, app, state, app.get_tool_description("active_day_ratio")
@@ -218,8 +218,8 @@ class ToolboxApp:
                 name="平均发帖长度",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "只统计帖表“帖子正文”列的文字长度，按账号计算平均每个帖的正文长度，"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "只统计帖子表“帖子正文”列的文字长度，按账号计算平均每个帖子的正文长度，"
                     "并在账号表最后新增“平均发帖长度”列。"
                 ),
                 factory=lambda parent, app, state: AveragePostLengthTool(
@@ -233,10 +233,10 @@ class ToolboxApp:
                 name="日均原创量（条）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "按每个账号最早到最晚的帖发布时间计算统计时间范围天数，"
-                    "仅排除帖表“创作类型”为 share 的转发帖后统计原创帖数量，"
-                    "用原创帖数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "按每个账号最早到最晚的帖子发布时间计算统计时间范围天数，"
+                    "仅排除帖子表“创作类型”为 share 的转发帖子后统计原创帖子数量，"
+                    "用原创帖子数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
                 ),
                 factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
                     parent, app, state, app.get_tool_description("average_daily_original_posts")
@@ -246,12 +246,12 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="weekly_post_frequency",
-                name="每周发布帖频率（次）",
+                name="每周发布帖子频率（次）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
                     "按每个账号最早到最晚的帖发布日期计算统计自然周数（含首尾日期，向上取整且最少 1 周），"
-                    "先在账号表最后新增“跨越周数”列，再新增“每周发布帖频率（次）”列。"
+                    "先在账号表最后新增“跨越周数”列，再新增“每周发布帖子频率（次）”列。"
                 ),
                 factory=lambda parent, app, state: WeeklyPostFrequencyTool(
                     parent, app, state, app.get_tool_description("weekly_post_frequency")
@@ -261,12 +261,12 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="average_original_post_interactions",
-                name="平均原创单帖互动数（条）",
+                name="平均原创单帖子互动数（条）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "仅统计帖表“创作类型”为 common 的原创帖，将每帖“点赞数”“评论数”“分享数”相加得到互动数，"
-                    "按账号计算平均原创单帖互动数，并在账号表最后新增“平均原创单帖互动数（条）”列。"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "仅统计帖子表“创作类型”为 common 的原创帖子，将每帖“点赞数”“评论数”“分享数”相加得到互动数，"
+                    "按账号计算平均原创单帖子互动数，并在账号表最后新增“平均原创单帖子互动数（条）”列。"
                 ),
                 factory=lambda parent, app, state: AverageOriginalPostInteractionsTool(
                     parent, app, state, app.get_tool_description("average_original_post_interactions")
@@ -279,8 +279,8 @@ class ToolboxApp:
                 name="附加观点转发率（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "仅统计“创作类型”为 share 的转发贴，其中“标题”或“帖子正文”任一不为空即视为附加观点，"
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "仅统计“创作类型”为 share 的转发帖子，其中“标题”或“帖子正文”任一不为空即视为附加观点，"
                     "按账号计算附加观点转发率，并在账号表最后新增“附加观点转发率”列。"
                 ),
                 factory=lambda parent, app, state: AddedOpinionShareRateTool(
@@ -294,8 +294,8 @@ class ToolboxApp:
                 name="信息来源的媒体阵营分布（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、帖 Excel 和账号名字典 Excel；仅统计帖表中“创作类型”为 share 的转发贴，"
-                    "用“分享贴账号名”匹配字典中的“账号立场归属”和“账号类型归属”，"
+                    "说明：选择账号 Excel、帖子 Excel 和账号名字典 Excel；仅统计帖子表中“创作类型”为 share 的转发帖子，"
+                    "用“分享帖账号名”匹配字典中的“账号立场归属”和“账号类型归属”，"
                     "按账号汇总各分组占比，并在账号表最后新增两列占比。"
                 ),
                 factory=lambda parent, app, state: SourceMediaCampRatioTool(
@@ -757,7 +757,7 @@ class GroupRunFrame(BaseToolFrame):
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", category: str, tool_keys: list[str]) -> None:
         self.category = category
         self.tool_keys = tool_keys
-        super().__init__(parent, app, {}, f"一键执行“{category}”分组中的 {len(tool_keys)} 个工具。账号表、帖表、字典表共用；每个工具可单独选择字典 sheet，并沿用该工具已保存的其他设置。")
+        super().__init__(parent, app, {}, f"一键执行“{category}”分组中的 {len(tool_keys)} 个工具。账号表、帖子表、字典表共用；每个工具可单独选择字典 sheet，并沿用该工具已保存的其他设置。")
         self.account_input_var = tk.StringVar(value="")
         self.post_input_var = tk.StringVar(value="")
         self.dictionary_input_var = tk.StringVar(value="")
@@ -877,12 +877,12 @@ class GroupRunFrame(BaseToolFrame):
         form = ttk.LabelFrame(self, text=f"{self.category} - 一键执行", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖子 Excel：", self.post_input_var, self.choose_post_input)
         if any(self._tool_needs_common_dictionary(key) for key in self.tool_keys):
             self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "最终输出 Excel：", self.output_var, None)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖子表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         list_card = ttk.LabelFrame(self, text="分组工具", style="Card.TLabelframe", padding=(12, 9))
@@ -970,7 +970,7 @@ class GroupRunFrame(BaseToolFrame):
             self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖子 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
             self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
