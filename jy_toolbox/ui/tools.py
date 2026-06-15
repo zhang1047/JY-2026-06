@@ -776,6 +776,7 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
     POST_TIME_COLUMN = "贴文发布时间"
+    SPAN_WEEKS_COLUMN = "跨越周数"
     OUTPUT_COLUMN = "每周发布帖子频率（次）"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
 
@@ -868,7 +869,7 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
                 "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
-                "已匹配 {matched_accounts} 个账号，已写入 {calculated_accounts} 个账号。输出：{output}".format(**result, output=output_path)
+                "已匹配 {matched_accounts} 个账号，已写入跨越周数和频率 {calculated_accounts} 个账号。输出：{output}".format(**result, output=output_path)
             )
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
