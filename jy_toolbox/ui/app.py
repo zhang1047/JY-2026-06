@@ -113,7 +113,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel、帖 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“内容偏好”分组，"
+                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“内容偏好”分组，"
                     "按账号计算各内容偏好分组占比，并在账号表最后新增“主题占比-分组名”列。"
                 ),
                 factory=lambda parent, app, state: PostThemeRatioTool(
@@ -128,7 +128,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel、帖 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "用字典 sheet 第一列（无标题）关键词快速扫描帖“标题”和“帖正文”，"
+                    "用字典 sheet 第一列（无标题）关键词快速扫描帖“标题”和“帖子正文”，"
                     "按账号计算包含任一关键词的帖数占该账号全部帖数的百分比，并在账号表最后新增“敏感话题参与率（%）”列。"
                 ),
                 factory=lambda parent, app, state: SensitiveTopicParticipationRateTool(
@@ -158,7 +158,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel、帖 Excel 和情感表达字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“情感表达倾向”枚举，"
+                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“情感表达倾向”枚举，"
                     "按账号计算情感表达分数（正面 +1、负面 -1、中性 0）以及正面、负面、中性的数量和占比。"
                 ),
                 factory=lambda parent, app, state: SentimentExpressionTool(
@@ -173,7 +173,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel、帖 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
-                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“两岸议题立场倾向”枚举，"
+                    "再用帖表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“两岸议题立场倾向”枚举，"
                     "按账号计算立场倾向分数（偏蓝 +1、中立 0、偏绿 -1）以及偏蓝、偏绿、中立的数量和占比。"
                 ),
                 factory=lambda parent, app, state: StanceTendencyTool(
@@ -219,7 +219,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "只统计帖表“帖正文”列的文字长度，按账号计算平均每个帖的正文长度，"
+                    "只统计帖表“帖子正文”列的文字长度，按账号计算平均每个帖的正文长度，"
                     "并在账号表最后新增“平均发帖长度”列。"
                 ),
                 factory=lambda parent, app, state: AveragePostLengthTool(
@@ -280,7 +280,7 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
-                    "仅统计“创作类型”为 share 的转发贴，其中“标题”或“帖正文”任一不为空即视为附加观点，"
+                    "仅统计“创作类型”为 share 的转发贴，其中“标题”或“帖子正文”任一不为空即视为附加观点，"
                     "按账号计算附加观点转发率，并在账号表最后新增“附加观点转发率”列。"
                 ),
                 factory=lambda parent, app, state: AddedOpinionShareRateTool(
@@ -775,6 +775,7 @@ class GroupRunFrame(BaseToolFrame):
         self.dictionary_loading_var = tk.StringVar(value="")
         self._batch_frames: list[BaseToolFrame] = []
         self._batch_index = 0
+        self._batch_failed = False
         self._current_account_path = ""
         self._temp_dir: str | None = None
         self._original_showinfo: Callable[..., object] | None = None
@@ -789,11 +790,11 @@ class GroupRunFrame(BaseToolFrame):
         ttk.Entry(parent, textvariable=var, state=entry_state).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         if label == "字典 Excel：":
             ttk.Label(parent, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).grid(row=row, column=2, sticky="e", padx=(10, 4), pady=8)
-            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=(4, 10), pady=8)
+            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, sticky="w", padx=(4, 10), pady=8)
         elif label.startswith("最终输出 Excel"):
-            ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=3, sticky="w", padx=10, pady=8)
+            ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         elif command is not None:
-            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=10, pady=8)
+            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, sticky="w", padx=10, pady=8)
 
     def _tool_needs_dictionary_sheet(self, key: str) -> bool:
         return key in {
@@ -1010,6 +1011,7 @@ class GroupRunFrame(BaseToolFrame):
             messagebox.showwarning("提示", "请先选择账号 Excel，系统会自动生成最终输出 Excel。", parent=self); return
         self._batch_frames = []
         self._batch_index = 0
+        self._batch_failed = False
         self._current_account_path = self.account_input_var.get().strip()
         if self._temp_dir:
             shutil.rmtree(self._temp_dir, ignore_errors=True)
@@ -1033,6 +1035,7 @@ class GroupRunFrame(BaseToolFrame):
         tool = self.app.tools[key]
         frame = tool.factory(self, self.app, self.app.config.get_tool_state(key))
         frame.pack_forget()
+        frame.save_state = lambda: None  # type: ignore[method-assign]  # 一键执行不把中间临时文件路径写入工具配置
         self._patch_frame_error_handler(frame)
         self._batch_frames.append(frame)
         step_output_path = self._step_output_path(key)
@@ -1068,6 +1071,7 @@ class GroupRunFrame(BaseToolFrame):
         def finish_error(exc: Exception, error_message: str) -> None:
             self._restore_showinfo()
             self._cleanup_temp_dir()
+            self._batch_failed = True
             self.status_var.set("一键执行已中断，请处理失败工具后重试。")
             original_error(exc, error_message)
         frame._finish_background_error = finish_error  # type: ignore[method-assign]
@@ -1080,6 +1084,8 @@ class GroupRunFrame(BaseToolFrame):
     def _wait_tool_done(self, frame: BaseToolFrame, key: str) -> None:
         if getattr(frame, "_background_running", False):
             self.after(300, lambda: self._wait_tool_done(frame, key))
+            return
+        if self._batch_failed:
             return
         if hasattr(frame, "account_input_var") and hasattr(frame, "output_var"):
             output_path = getattr(frame, "output_var").get().strip()
