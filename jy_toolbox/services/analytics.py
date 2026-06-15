@@ -596,6 +596,7 @@ def calculate_weekly_post_frequency_excel(
 
     if progress is not None:
         progress(74, "正在按账号计算每周发布帖子频率……")
+    span_weeks_by_homepage: dict[str, int] = {}
     frequency_by_homepage: dict[str, float] = {}
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
         first_date = homepage_rows["__post_datetime__"].min().date()
@@ -609,15 +610,19 @@ def calculate_weekly_post_frequency_excel(
         # thousands. A minimum one-week denominator keeps short observation
         # windows interpretable (e.g. one post in the data means 1 time/week).
         span_weeks = max(1, (span_days + 6) // 7)
+        span_weeks_by_homepage[str(homepage)] = span_weeks
         frequency_by_homepage[str(homepage)] = round(len(homepage_rows) / span_weeks, 2)
 
     if progress is not None:
-        progress(84, "正在写回账号表每周发布帖子频率列……")
+        progress(84, "正在写回账号表跨越周数和每周发布帖子频率列……")
+    span_weeks_column = "跨越周数"
     output_column = "每周发布帖子频率（次）"
     output_df = account_df.copy()
-    if output_column in output_df.columns:
-        output_df = output_df.drop(columns=[output_column])
+    existing_output_columns = [col for col in [span_weeks_column, output_column] if col in output_df.columns]
+    if existing_output_columns:
+        output_df = output_df.drop(columns=existing_output_columns)
     account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df[span_weeks_column] = account_keys.map(lambda key: span_weeks_by_homepage.get(key, ""))
     output_df[output_column] = account_keys.map(lambda key: frequency_by_homepage.get(key, ""))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
