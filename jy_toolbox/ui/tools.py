@@ -50,11 +50,11 @@ class PostDedupTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始去重", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -164,11 +164,11 @@ class PostingPeriodTypeTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
@@ -262,11 +262,11 @@ class PostTypeRatioTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -401,11 +401,11 @@ class AveragePostLengthTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -544,11 +544,11 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -686,11 +686,11 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
@@ -805,11 +805,11 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
@@ -908,11 +908,11 @@ class DailyActiveSpanTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
@@ -1029,11 +1029,11 @@ class ActiveDayRatioTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -1170,11 +1170,11 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -1324,11 +1324,11 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -1490,11 +1490,11 @@ class PostThemeRatioTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -1615,11 +1615,11 @@ class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def choose_account_input(self) -> None:
@@ -1728,11 +1728,11 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
@@ -1885,11 +1885,11 @@ class SentimentExpressionTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
@@ -2015,11 +2015,11 @@ class StanceTendencyTool(BaseToolFrame):
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "开始统计", self.run, role="primary", width=82).pack(side="left")
+        self.add_processing_label(actions)
         make_rounded_button(actions, "保存当前填写", self.save_state, width=98).pack(side="left", padx=10)
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
-        self.add_progress_bar(status_card)
         self.load_configured_sheets_async()
 
     def _path_row(
