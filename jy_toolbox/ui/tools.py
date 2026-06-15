@@ -29,7 +29,7 @@ from jy_toolbox.ui.base import BaseToolFrame
 from jy_toolbox.ui.widgets import make_rounded_button
 
 class PostDedupTool(BaseToolFrame):
-    REQUIRED_COLUMNS = ["贴文url", "点赞数", "分享数", "评论数"]
+    REQUIRED_COLUMNS = ["帖url", "点赞数", "分享数", "评论数"]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
         super().__init__(parent, app, state, description)
@@ -40,7 +40,7 @@ class PostDedupTool(BaseToolFrame):
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="贴文去重", style="Card.TLabelframe", padding=(12, 9))
+        form = ttk.LabelFrame(self, text="帖去重", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "输入 Excel：", self.input_var, self.choose_input)
         self._path_row(form, 1, "输出 Excel：", self.output_var, self.choose_output)
@@ -132,7 +132,7 @@ class PostDedupTool(BaseToolFrame):
             )
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
-        self.run_in_background(task, on_success, start_message="已开始后台执行贴文去重……")
+        self.run_in_background(task, on_success, start_message="已开始后台执行帖去重……")
 
 
 class PostingPeriodTypeTool(BaseToolFrame):
@@ -147,18 +147,18 @@ class PostingPeriodTypeTool(BaseToolFrame):
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和发帖时段字典 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel 和发帖时段字典 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="高频发帖时段类型", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -187,7 +187,7 @@ class PostingPeriodTypeTool(BaseToolFrame):
         self.save_state()
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path); self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var); self.save_state()
 
@@ -219,7 +219,7 @@ class PostingPeriodTypeTool(BaseToolFrame):
         if not account_input_path:
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self); return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择发帖时段字典 Excel。", parent=self); return
         if not output_path:
@@ -228,16 +228,16 @@ class PostingPeriodTypeTool(BaseToolFrame):
         def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
             return calculate_posting_period_type_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
         def on_success(result: dict[str, int]) -> None:
-            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典时段 {periods} 个，有效时间贴文 {valid_time_posts} 行，匹配时段贴文 {matched_posts} 行，已写入 {typed_accounts} 个账号，其中混乱型 {disorder_accounts} 个。输出：{output}".format(**result, output=output_path))
+            self.status_var.set("完成：账号 {accounts} 行，帖 {posts} 行，字典时段 {periods} 个，有效时间帖 {valid_time_posts} 行，匹配时段帖 {matched_posts} 行，已写入 {typed_accounts} 个账号，其中混乱型 {disorder_accounts} 个。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
         self.run_in_background(task, on_success, start_message="已开始后台统计高频发帖时段类型……")
 
 class PostTypeRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    LEGACY_OUTPUT_COLUMN = "帖子类型"
+    LEGACY_OUTPUT_COLUMN = "帖类型"
     OUTPUT_COLUMNS = ("文字帖占比", "图片帖占比", "视频帖占比")
-    REQUIRED_POST_COLUMNS = ["主页url", "图片附件", "创作类型", "标题", "帖子正文"]
+    REQUIRED_POST_COLUMNS = ["主页url", "图片附件", "创作类型", "标题", "帖正文"]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
         super().__init__(parent, app, state, description)
@@ -246,17 +246,17 @@ class PostTypeRatioTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="贴文类型占比（%）", style="Card.TLabelframe", padding=(12, 9))
+        form = ttk.LabelFrame(self, text="帖类型占比（%）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -292,12 +292,12 @@ class PostTypeRatioTool(BaseToolFrame):
         self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
-            self.output_var.set(str(p.with_name(f"{p.stem}_帖子类型占比.xlsx")))
+            self.output_var.set(str(p.with_name(f"{p.stem}_帖类型占比.xlsx")))
         self.save_state()
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -338,7 +338,7 @@ class PostTypeRatioTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -358,7 +358,7 @@ class PostTypeRatioTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，已匹配 {matched_accounts} 个账号，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，已匹配 {matched_accounts} 个账号，"
                 "有可判断类型的账号 {typed_accounts} 个。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
@@ -369,12 +369,12 @@ class PostTypeRatioTool(BaseToolFrame):
             )
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
-        self.run_in_background(task, on_success, start_message="已开始后台统计贴文类型占比……")
+        self.run_in_background(task, on_success, start_message="已开始后台统计帖类型占比……")
 
 class AveragePostLengthTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    BODY_COLUMN = "帖子正文"
+    BODY_COLUMN = "帖正文"
     OUTPUT_COLUMN = "平均发帖长度"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, BODY_COLUMN]
 
@@ -385,17 +385,17 @@ class AveragePostLengthTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="平均发帖长度", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -436,7 +436,7 @@ class AveragePostLengthTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -477,7 +477,7 @@ class AveragePostLengthTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -497,7 +497,7 @@ class AveragePostLengthTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，已匹配 {matched_accounts} 个账号，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，已匹配 {matched_accounts} 个账号，"
                 "已写入 {averaged_accounts} 个账号。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
@@ -528,17 +528,17 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="平均原创单帖互动数（条）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -579,7 +579,7 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -620,7 +620,7 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -640,7 +640,7 @@ class AverageOriginalPostInteractionsTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，其中原创帖 {original_posts} 行，已匹配 {matched_accounts} 个账号，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，其中原创帖 {original_posts} 行，已匹配 {matched_accounts} 个账号，"
                 "已写入 {averaged_accounts} 个账号。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
@@ -659,7 +659,7 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
     CREATION_TYPE_COLUMN = "创作类型"
-    POST_TIME_COLUMN = "贴文发布时间"
+    POST_TIME_COLUMN = "帖发布时间"
     OUTPUT_COLUMN = "日均原创量（条）"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, CREATION_TYPE_COLUMN, POST_TIME_COLUMN]
 
@@ -670,17 +670,17 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="日均原创量（条）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -710,7 +710,7 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
         self.save_state()
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
             self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
@@ -745,7 +745,7 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -765,7 +765,7 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，有有效发布时间的帖 {valid_time_posts} 行，"
                 "其中原创帖 {original_posts} 行，已匹配 {matched_accounts} 个账号，"
                 "已写入 {averaged_accounts} 个账号。输出：{output}".format(**result, output=output_path)
             )
@@ -777,9 +777,9 @@ class AverageDailyOriginalPostsTool(BaseToolFrame):
 class WeeklyPostFrequencyTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    POST_TIME_COLUMN = "贴文发布时间"
+    POST_TIME_COLUMN = "帖发布时间"
     SPAN_WEEKS_COLUMN = "跨越周数"
-    OUTPUT_COLUMN = "每周发布帖子频率（次）"
+    OUTPUT_COLUMN = "每周发布帖频率（次）"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
@@ -789,17 +789,17 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="每周发布帖子频率（次）", style="Card.TLabelframe", padding=(12, 9))
+        form = ttk.LabelFrame(self, text="每周发布帖频率（次）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -825,11 +825,11 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
         self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
-            self.output_var.set(str(p.with_name(f"{p.stem}_每周发布帖子频率.xlsx")))
+            self.output_var.set(str(p.with_name(f"{p.stem}_每周发布帖频率.xlsx")))
         self.save_state()
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
             self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
@@ -860,7 +860,7 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
         if not account_input_path:
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self); return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self); return
         self.save_state()
@@ -870,18 +870,18 @@ class WeeklyPostFrequencyTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，有有效发布时间的帖 {valid_time_posts} 行，"
                 "已匹配 {matched_accounts} 个账号，已写入跨越周数和频率 {calculated_accounts} 个账号。输出：{output}".format(**result, output=output_path)
             )
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
-        self.run_in_background(task, on_success, start_message="已开始后台统计每周发布帖子频率……")
+        self.run_in_background(task, on_success, start_message="已开始后台统计每周发布帖频率……")
 
 
 class DailyActiveSpanTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    POST_TIME_COLUMN = "贴文发布时间"
+    POST_TIME_COLUMN = "帖发布时间"
     OUTPUT_COLUMN = "日均在线活跃时段跨度（小时/天）"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
 
@@ -892,17 +892,17 @@ class DailyActiveSpanTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="日均在线活跃时段跨度（小时/天）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -932,7 +932,7 @@ class DailyActiveSpanTool(BaseToolFrame):
         self.save_state()
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
             self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
@@ -967,7 +967,7 @@ class DailyActiveSpanTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -987,7 +987,7 @@ class DailyActiveSpanTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，有有效发布时间的帖 {valid_time_posts} 行，"
                 "已匹配 {matched_accounts} 个账号，符合单日 2 条及以上的日期 {qualified_days} 个，"
                 "已写入 {spanned_accounts} 个账号。输出：{output}".format(**result, output=output_path)
             )
@@ -999,9 +999,9 @@ class DailyActiveSpanTool(BaseToolFrame):
 class ActiveDayRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    POST_TIME_COLUMN = "贴文发布时间"
-    POST_COUNT_COLUMN = "帖子数量"
-    POST_SPAN_DAYS_COLUMN = "帖子时间跨度天数"
+    POST_TIME_COLUMN = "帖发布时间"
+    POST_COUNT_COLUMN = "帖数量"
+    POST_SPAN_DAYS_COLUMN = "帖时间跨度天数"
     ACTIVE_DAYS_COLUMN = "活跃天数"
     OUTPUT_COLUMN = "活跃天数占比"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, POST_TIME_COLUMN]
@@ -1013,17 +1013,17 @@ class ActiveDayRatioTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="活跃天数占比（%）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -1064,7 +1064,7 @@ class ActiveDayRatioTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -1105,7 +1105,7 @@ class ActiveDayRatioTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -1125,9 +1125,9 @@ class ActiveDayRatioTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，有有效发布时间的贴文 {valid_time_posts} 行，"
-                "已匹配 {matched_accounts} 个账号，已写入帖子数量 {post_count_accounts} 个账号，"
-                "已写入帖子时间跨度天数 {active_span_accounts} 个账号，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，有有效发布时间的帖 {valid_time_posts} 行，"
+                "已匹配 {matched_accounts} 个账号，已写入帖数量 {post_count_accounts} 个账号，"
+                "已写入帖时间跨度天数 {active_span_accounts} 个账号，"
                 "已写入活跃天数 {active_days_accounts} 个账号，"
                 "已写入活跃天数占比 {active_ratio_accounts} 个账号。输出：{output}".format(
                     **result,
@@ -1143,7 +1143,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
     POST_URL_COLUMN = "主页url"
     CREATION_TYPE_COLUMN = "创作类型"
     TITLE_COLUMN = "标题"
-    BODY_COLUMN = "帖子正文"
+    BODY_COLUMN = "帖正文"
     OUTPUT_COLUMN = "附加观点转发率"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, CREATION_TYPE_COLUMN, TITLE_COLUMN, BODY_COLUMN]
 
@@ -1154,17 +1154,17 @@ class AddedOpinionShareRateTool(BaseToolFrame):
         self.output_var = tk.StringVar(value=state.get("output_path", ""))
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel 和贴文 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel 和帖 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="附加观点转发率（%）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -1205,7 +1205,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -1246,7 +1246,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self)
@@ -1266,7 +1266,7 @@ class AddedOpinionShareRateTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，其中转发贴 {share_posts} 行，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，其中转发贴 {share_posts} 行，"
                 "已匹配 {matched_accounts} 个账号，已写入 {rated_accounts} 个账号。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
@@ -1301,7 +1301,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和账号名字典 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel 和账号名字典 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
@@ -1313,11 +1313,11 @@ class SourceMediaCampRatioTool(BaseToolFrame):
         )
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
 
@@ -1359,7 +1359,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -1414,7 +1414,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择账号名字典 Excel。", parent=self)
@@ -1439,7 +1439,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，其中分享贴 {share_posts} 行，"
+                "完成：账号 {accounts} 行，帖 {posts} 行，其中分享贴 {share_posts} 行，"
                 "字典匹配分享贴 {matched_share_posts} 行，已写入 {classified_accounts} 个账号。输出：{output}".format(
                     accounts=result["accounts"],
                     posts=result["posts"],
@@ -1457,7 +1457,7 @@ class SourceMediaCampRatioTool(BaseToolFrame):
 class PostThemeRatioTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    BODY_COLUMN = "帖子正文"
+    BODY_COLUMN = "帖正文"
     THEME_COLUMN = "内容偏好"
     OUTPUT_PREFIX = "主题占比-"
     REQUIRED_POST_COLUMNS = [POST_URL_COLUMN, BODY_COLUMN]
@@ -1472,19 +1472,19 @@ class PostThemeRatioTool(BaseToolFrame):
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和内容偏好字典 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel 和内容偏好字典 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
-        form = ttk.LabelFrame(self, text="帖子主题占比（%）", style="Card.TLabelframe", padding=(12, 9))
+        form = ttk.LabelFrame(self, text="帖主题占比（%）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
-        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var, hint="选择含第一列“帖子正文”和“内容偏好”列的 sheet")
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
+        self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var, hint="选择含第一列“帖正文”和“内容偏好”列的 sheet")
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -1520,12 +1520,12 @@ class PostThemeRatioTool(BaseToolFrame):
         self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
         if not self.output_var.get().strip():
             p = Path(path)
-            self.output_var.set(str(p.with_name(f"{p.stem}_帖子主题占比.xlsx")))
+            self.output_var.set(str(p.with_name(f"{p.stem}_帖主题占比.xlsx")))
         self.save_state()
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -1574,7 +1574,7 @@ class PostThemeRatioTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择内容偏好字典 Excel。", parent=self); return
@@ -1587,10 +1587,10 @@ class PostThemeRatioTool(BaseToolFrame):
             return calculate_post_theme_ratios_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
 
         def on_success(result: dict[str, int]) -> None:
-            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典 {dictionary_rows} 行，识别主题 {themes} 个，匹配贴文 {matched_posts} 行，已写入 {themed_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            self.status_var.set("完成：账号 {accounts} 行，帖 {posts} 行，字典 {dictionary_rows} 行，识别主题 {themes} 个，匹配帖 {matched_posts} 行，已写入 {themed_accounts} 个账号。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
-        self.run_in_background(task, on_success, start_message="已开始后台统计帖子主题占比……")
+        self.run_in_background(task, on_success, start_message="已开始后台统计帖主题占比……")
 
 
 class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
@@ -1598,17 +1598,17 @@ class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
         super().__init__(parent, app, state, description)
-        self.status_var.set("请选择账号 Excel、贴文 Excel 和敏感话题关键词字典 Excel 后开始统计。")
+        self.status_var.set("请选择账号 Excel、帖 Excel 和敏感话题关键词字典 Excel 后开始统计。")
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="敏感话题参与率（%）", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "关键词字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var, hint="选择第一列为关键词、无标题的 sheet")
         form.columnconfigure(1, weight=1)
 
@@ -1663,7 +1663,7 @@ class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
         if not account_input_path:
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self); return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择敏感话题关键词字典 Excel。", parent=self); return
         if not output_path:
@@ -1674,7 +1674,7 @@ class SensitiveTopicParticipationRateTool(PostThemeRatioTool):
             return calculate_sensitive_topic_participation_rate_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
 
         def on_success(result: dict[str, int]) -> None:
-            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，关键词 {dictionary_keywords} 个，匹配账号 {matched_accounts} 个，敏感话题贴文 {sensitive_posts} 行，已写入 {rated_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            self.status_var.set("完成：账号 {accounts} 行，帖 {posts} 行，关键词 {dictionary_keywords} 个，匹配账号 {matched_accounts} 个，敏感话题帖 {sensitive_posts} 行，已写入 {rated_accounts} 个账号。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
         self.run_in_background(task, on_success, start_message="已开始后台统计敏感话题参与率……")
@@ -1690,7 +1690,7 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.keyword_var = tk.StringVar()
         self.ignore_chinese_script_var = tk.BooleanVar(value=bool(state.get("ignore_chinese_script", False)))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel，并新增自定义关键词后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel，并新增自定义关键词后开始统计。")
         self.keywords: list[str] = [str(item).strip() for item in state.get("keywords", []) if str(item).strip()]
         self._build_form()
 
@@ -1698,10 +1698,10 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
         form = ttk.LabelFrame(self, text="自定义关键词统计", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 3, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 4, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 4, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
 
         keyword_card = ttk.LabelFrame(self, text="关键词（每个关键词会写回一列“词频-关键词”）", style="Card.TLabelframe", padding=(12, 9))
@@ -1782,7 +1782,7 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
         self.save_state()
 
     def choose_post_input(self) -> None:
-        path = filedialog.askopenfilename(title="选择贴文 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.post_input_var.set(path)
             self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
@@ -1815,7 +1815,7 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
         if not account_input_path:
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self); return
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self); return
         if not output_path:
             messagebox.showwarning("提示", "请选择输出 Excel。", parent=self); return
         if not self.keywords:
@@ -1837,7 +1837,7 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
 
         def on_success(result: dict[str, int]) -> None:
             self.status_var.set(
-                "完成：账号 {accounts} 行，贴文 {posts} 行，关键词 {keywords} 个，匹配账号 {matched_accounts} 个，总出现次数 {total_occurrences} 次。输出：{output}".format(**result, output=output_path)
+                "完成：账号 {accounts} 行，帖 {posts} 行，关键词 {keywords} 个，匹配账号 {matched_accounts} 个，总出现次数 {total_occurrences} 次。输出：{output}".format(**result, output=output_path)
             )
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
 
@@ -1847,7 +1847,7 @@ class CustomKeywordFrequencyTool(BaseToolFrame):
 class SentimentExpressionTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    BODY_COLUMN = "帖子正文"
+    BODY_COLUMN = "帖正文"
     SENTIMENT_COLUMN = "情感表达倾向"
     OUTPUT_COLUMNS = (
         "情感表达-分数",
@@ -1868,18 +1868,18 @@ class SentimentExpressionTool(BaseToolFrame):
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和情感表达字典 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel 和情感表达字典 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="情感表达分数&数量占比", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -1919,7 +1919,7 @@ class SentimentExpressionTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -1958,7 +1958,7 @@ class SentimentExpressionTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择情感表达字典 Excel。", parent=self); return
@@ -1969,7 +1969,7 @@ class SentimentExpressionTool(BaseToolFrame):
         def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
             return calculate_sentiment_expression_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
         def on_success(result: dict[str, int]) -> None:
-            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典 {dictionary_rows} 行，匹配贴文 {matched_posts} 行，已写入 {sentiment_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            self.status_var.set("完成：账号 {accounts} 行，帖 {posts} 行，字典 {dictionary_rows} 行，匹配帖 {matched_posts} 行，已写入 {sentiment_accounts} 个账号。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
         self.run_in_background(task, on_success, start_message="已开始后台统计情感表达分数和数量占比……")
 
@@ -1977,7 +1977,7 @@ class SentimentExpressionTool(BaseToolFrame):
 class StanceTendencyTool(BaseToolFrame):
     ACCOUNT_URL_COLUMN = "FB主页"
     POST_URL_COLUMN = "主页url"
-    BODY_COLUMN = "帖子正文"
+    BODY_COLUMN = "帖正文"
     STANCE_COLUMN = "两岸议题立场倾向"
     OUTPUT_COLUMNS = (
         "立场倾向-分数",
@@ -1998,18 +1998,18 @@ class StanceTendencyTool(BaseToolFrame):
         self.account_sheet_var = tk.StringVar(value=state.get("account_sheet_name", ""))
         self.post_sheet_var = tk.StringVar(value=state.get("post_sheet_name", ""))
         self.dictionary_sheet_var = tk.StringVar(value=state.get("dictionary_sheet_name", ""))
-        self.status_var = tk.StringVar(value="请选择账号 Excel、贴文 Excel 和立场倾向字典 Excel 后开始统计。")
+        self.status_var = tk.StringVar(value="请选择账号 Excel、帖 Excel 和立场倾向字典 Excel 后开始统计。")
         self._build_form()
 
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text="立场倾向分数&数量占比", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
-        self._path_row(form, 1, "贴文 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
-        self.post_sheet_combo = self.add_sheet_selector(form, 5, "贴文表工作表：", self.post_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         self.dictionary_sheet_combo = self.add_sheet_selector(form, 6, "字典表工作表：", self.dictionary_sheet_var)
         form.columnconfigure(1, weight=1)
         actions = ttk.Frame(self, style="Surface.TFrame")
@@ -2049,7 +2049,7 @@ class StanceTendencyTool(BaseToolFrame):
 
     def choose_post_input(self) -> None:
         path = filedialog.askopenfilename(
-            title="选择贴文 Excel 文件",
+            title="选择帖 Excel 文件",
             filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")],
         )
         if path:
@@ -2088,7 +2088,7 @@ class StanceTendencyTool(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self)
             return
         if not post_input_path:
-            messagebox.showwarning("提示", "请选择贴文 Excel。", parent=self)
+            messagebox.showwarning("提示", "请选择帖 Excel。", parent=self)
             return
         if not dictionary_input_path:
             messagebox.showwarning("提示", "请选择立场倾向字典 Excel。", parent=self); return
@@ -2099,6 +2099,6 @@ class StanceTendencyTool(BaseToolFrame):
         def task(progress: Callable[[float, str | None], None]) -> dict[str, int]:
             return calculate_stance_tendency_excel(Path(account_input_path), Path(post_input_path), Path(dictionary_input_path), Path(output_path), self.app.config.data.get("passwords", []), account_sheet_name, post_sheet_name, dictionary_sheet_name, progress)
         def on_success(result: dict[str, int]) -> None:
-            self.status_var.set("完成：账号 {accounts} 行，贴文 {posts} 行，字典 {dictionary_rows} 行，匹配贴文 {matched_posts} 行，已写入 {stance_accounts} 个账号。输出：{output}".format(**result, output=output_path))
+            self.status_var.set("完成：账号 {accounts} 行，帖 {posts} 行，字典 {dictionary_rows} 行，匹配帖 {matched_posts} 行，已写入 {stance_accounts} 个账号。输出：{output}".format(**result, output=output_path))
             messagebox.showinfo("完成", self.status_var.get(), parent=self)
         self.run_in_background(task, on_success, start_message="已开始后台统计立场倾向分数和数量占比……")

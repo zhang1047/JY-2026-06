@@ -97,7 +97,7 @@ class BaseToolFrame(ttk.Frame):
     ) -> tk.Widget:
         """增加统一的 sheet 输入控件，供当前和后续 Excel 工具复用。"""
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
-        if label in {"账号表工作表：", "贴文表工作表："}:
+        if label in {"账号表工作表：", "帖表工作表："}:
             hint = "留空读取第一个 sheet，可手动输入工作表名"
             widget = ttk.Entry(parent, textvariable=var)
         else:
@@ -170,7 +170,7 @@ class BaseToolFrame(ttk.Frame):
         threading.Thread(target=worker, daemon=True).start()
 
     def use_first_sheet_by_default(self, combo: tk.Widget, var: tk.StringVar) -> None:
-        """账号表和贴文表不自动识别工作表；留空时读取逻辑使用第一个 sheet。"""
+        """账号表和帖表不自动识别工作表；留空时读取逻辑使用第一个 sheet。"""
         if not self._widget_exists(combo):
             return
         if isinstance(combo, ttk.Combobox):

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from jy_toolbox.core.config import ConfigStore
 from jy_toolbox.core.constants import *
@@ -58,10 +64,10 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_dedup",
-                name="贴文去重",
+                name="帖去重",
                 default_category="Excel 工具",
                 description=(
-                    "说明：根据“贴文url”列去重。若同一 URL 有重复行，会比较“点赞数”“分享数”“评论数”三列的数值总和，"
+                    "说明：根据“帖url”列去重。若同一 URL 有重复行，会比较“点赞数”“分享数”“评论数”三列的数值总和，"
                     "优先保留总和更大的记录；如果总和相同，则随机保留其中一条。"
                 ),
                 factory=lambda parent, app, state: PostDedupTool(
@@ -72,11 +78,11 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_type_ratio",
-                name="贴文类型占比（%）",
+                name="帖类型占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "按规则统计每个账号文字、图片、视频贴文占比，并在账号表最后新增三列占比。"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
+                    "按规则统计每个账号文字、图片、视频帖占比，并在账号表最后新增三列占比。"
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
@@ -89,8 +95,8 @@ class ToolboxApp:
                 name="高频发帖时段类型",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和发帖时段字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "按字典中的“时段类型 / 起始时段 / 结束时段”动态判断每条贴文发布时间所属时段，"
+                    "说明：选择账号 Excel、帖 Excel 和发帖时段字典 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "按字典中的“时段类型 / 起始时段 / 结束时段”动态判断每条帖发布时间所属时段，"
                     "再按账号写回“高频发帖时段”和“高频发帖类型”。若账号在所有字典时段均有发帖且各时段占比差值不高于 10%，"
                     "则写为混乱型且不写回具体时段。"
                 ),
@@ -102,12 +108,12 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="post_theme_ratio",
-                name="帖子主题占比（%）",
+                name="帖主题占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“内容偏好”分类，"
-                    "按账号计算各内容偏好分类占比，并在账号表最后新增“主题占比-分类名”列。"
+                    "说明：选择账号 Excel、帖 Excel 和内容偏好字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
+                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“内容偏好”分组，"
+                    "按账号计算各内容偏好分组占比，并在账号表最后新增“主题占比-分组名”列。"
                 ),
                 factory=lambda parent, app, state: PostThemeRatioTool(
                     parent, app, state, app.get_tool_description("post_theme_ratio")
@@ -120,9 +126,9 @@ class ToolboxApp:
                 name="敏感话题参与率（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "用字典 sheet 第一列（无标题）关键词快速扫描贴文“标题”和“帖子正文”，"
-                    "按账号计算包含任一关键词的贴文数占该账号全部贴文数的百分比，并在账号表最后新增“敏感话题参与率（%）”列。"
+                    "说明：选择账号 Excel、帖 Excel 和敏感话题关键词字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
+                    "用字典 sheet 第一列（无标题）关键词快速扫描帖“标题”和“帖正文”，"
+                    "按账号计算包含任一关键词的帖数占该账号全部帖数的百分比，并在账号表最后新增“敏感话题参与率（%）”列。"
                 ),
                 factory=lambda parent, app, state: SensitiveTopicParticipationRateTool(
                     parent, app, state, app.get_tool_description("sensitive_topic_participation_rate")
@@ -135,8 +141,8 @@ class ToolboxApp:
                 name="自定义关键词统计",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "在工具界面新增多个关键词后，按每个关键词统计每个账号所有贴文标题和正文中的出现次数，"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "在工具界面新增多个关键词后，按每个关键词统计每个账号所有帖标题和正文中的出现次数，"
                     "并在账号表最后新增“词频-关键词”列。关键词列表支持增删，并可一键转换为繁体或简体。"
                 ),
                 factory=lambda parent, app, state: CustomKeywordFrequencyTool(
@@ -150,8 +156,8 @@ class ToolboxApp:
                 name="情感表达分数&数量占比",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和情感表达字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“情感表达倾向”枚举，"
+                    "说明：选择账号 Excel、帖 Excel 和情感表达字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
+                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“情感表达倾向”枚举，"
                     "按账号计算情感表达分数（正面 +1、负面 -1、中性 0）以及正面、负面、中性的数量和占比。"
                 ),
                 factory=lambda parent, app, state: SentimentExpressionTool(
@@ -165,8 +171,8 @@ class ToolboxApp:
                 name="立场倾向分数&数量占比",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联，"
-                    "再用贴文表“帖子正文”匹配字典 sheet 第一列“帖子正文”的“两岸议题立场倾向”枚举，"
+                    "说明：选择账号 Excel、帖 Excel 和立场倾向字典 Excel，通过账号表“FB主页”与帖表“主页url”关联，"
+                    "再用帖表“帖正文”匹配字典 sheet 第一列“帖正文”的“两岸议题立场倾向”枚举，"
                     "按账号计算立场倾向分数（偏蓝 +1、中立 0、偏绿 -1）以及偏蓝、偏绿、中立的数量和占比。"
                 ),
                 factory=lambda parent, app, state: StanceTendencyTool(
@@ -180,7 +186,7 @@ class ToolboxApp:
                 name="日均在线活跃时段跨度（小时/天）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
                     "仅统计每个账号单日发帖 2 条及以上的日期，先按日期计算当天最早到最晚发帖时间间隔（小时），"
                     "再对这些日期的间隔取平均值，并在账号表最后新增“日均在线活跃时段跨度（小时/天）”列。"
                 ),
@@ -195,10 +201,10 @@ class ToolboxApp:
                 name="活跃天数占比（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "按每个账号最早到最晚的贴文发布时间计算账号发帖时间范围天数，"
-                    "再用该账号实际发帖日期数除以时间范围天数，并在账号表最后依次新增“帖子数量”、"
-                    "“帖子时间跨度天数”、“活跃天数”和“活跃天数占比”列。"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "按每个账号最早到最晚的帖发布时间计算账号发帖时间范围天数，"
+                    "再用该账号实际发帖日期数除以时间范围天数，并在账号表最后依次新增“帖数量”、"
+                    "“帖时间跨度天数”、“活跃天数”和“活跃天数占比”列。"
                 ),
                 factory=lambda parent, app, state: ActiveDayRatioTool(
                     parent, app, state, app.get_tool_description("active_day_ratio")
@@ -211,8 +217,8 @@ class ToolboxApp:
                 name="平均发帖长度",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "只统计贴文表“帖子正文”列的文字长度，按账号计算平均每个帖子的正文长度，"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "只统计帖表“帖正文”列的文字长度，按账号计算平均每个帖的正文长度，"
                     "并在账号表最后新增“平均发帖长度”列。"
                 ),
                 factory=lambda parent, app, state: AveragePostLengthTool(
@@ -226,10 +232,10 @@ class ToolboxApp:
                 name="日均原创量（条）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "按每个账号最早到最晚的贴文发布时间计算统计时间范围天数，"
-                    "仅排除贴文表“创作类型”为 share 的转发帖后统计原创贴文数量，"
-                    "用原创贴文数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "按每个账号最早到最晚的帖发布时间计算统计时间范围天数，"
+                    "仅排除帖表“创作类型”为 share 的转发帖后统计原创帖数量，"
+                    "用原创帖数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
                 ),
                 factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
                     parent, app, state, app.get_tool_description("average_daily_original_posts")
@@ -239,12 +245,12 @@ class ToolboxApp:
         self.add_tool(
             ToolDefinition(
                 key="weekly_post_frequency",
-                name="每周发布帖子频率（次）",
+                name="每周发布帖频率（次）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "按每个账号最早到最晚的贴文发布日期计算统计自然周数（含首尾日期，向上取整且最少 1 周），"
-                    "先在账号表最后新增“跨越周数”列，再新增“每周发布帖子频率（次）”列。"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "按每个账号最早到最晚的帖发布日期计算统计自然周数（含首尾日期，向上取整且最少 1 周），"
+                    "先在账号表最后新增“跨越周数”列，再新增“每周发布帖频率（次）”列。"
                 ),
                 factory=lambda parent, app, state: WeeklyPostFrequencyTool(
                     parent, app, state, app.get_tool_description("weekly_post_frequency")
@@ -257,8 +263,8 @@ class ToolboxApp:
                 name="平均原创单帖互动数（条）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "仅统计贴文表“创作类型”为 common 的原创帖，将每帖“点赞数”“评论数”“分享数”相加得到互动数，"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "仅统计帖表“创作类型”为 common 的原创帖，将每帖“点赞数”“评论数”“分享数”相加得到互动数，"
                     "按账号计算平均原创单帖互动数，并在账号表最后新增“平均原创单帖互动数（条）”列。"
                 ),
                 factory=lambda parent, app, state: AverageOriginalPostInteractionsTool(
@@ -272,8 +278,8 @@ class ToolboxApp:
                 name="附加观点转发率（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
-                    "仅统计“创作类型”为 share 的转发贴，其中“标题”或“帖子正文”任一不为空即视为附加观点，"
+                    "说明：选择账号 Excel 和帖 Excel，通过账号表“FB主页”与帖表“主页url”关联；"
+                    "仅统计“创作类型”为 share 的转发贴，其中“标题”或“帖正文”任一不为空即视为附加观点，"
                     "按账号计算附加观点转发率，并在账号表最后新增“附加观点转发率”列。"
                 ),
                 factory=lambda parent, app, state: AddedOpinionShareRateTool(
@@ -287,15 +293,16 @@ class ToolboxApp:
                 name="信息来源的媒体阵营分布（%）",
                 default_category="Excel 工具",
                 description=(
-                    "说明：选择账号 Excel、贴文 Excel 和账号名字典 Excel；仅统计贴文表中“创作类型”为 share 的转发贴，"
+                    "说明：选择账号 Excel、帖 Excel 和账号名字典 Excel；仅统计帖表中“创作类型”为 share 的转发贴，"
                     "用“分享贴账号名”匹配字典中的“账号立场归属”和“账号类型归属”，"
-                    "按账号汇总各分类占比，并在账号表最后新增两列占比。"
+                    "按账号汇总各分组占比，并在账号表最后新增两列占比。"
                 ),
                 factory=lambda parent, app, state: SourceMediaCampRatioTool(
                     parent, app, state, app.get_tool_description("source_media_camp_ratio")
                 ),
             )
         )
+
 
     def add_tool(self, tool: ToolDefinition) -> None:
         self.tools[tool.key] = tool
@@ -562,8 +569,9 @@ class ToolboxApp:
                 foreground=COLOR_TEXT,
                 font=APP_FONT_BOLD,
             ).pack(side="left")
-            make_rounded_button(header, "改名", lambda c=category: self.rename_category(c), width=48, height=24).pack(side="right")
-            make_rounded_button(header, "删除", lambda c=category: self.delete_category(c), role="danger", width=48, height=24).pack(side="right", padx=6)
+            make_rounded_button(header, "删除", lambda c=category: self.delete_category(c), role="danger", width=48, height=24).pack(side="right")
+            make_rounded_button(header, "改名", lambda c=category: self.rename_category(c), width=48, height=24).pack(side="right", padx=6)
+            make_rounded_button(header, "一键执行", lambda c=category: self.open_group_run(c), role="primary", width=72, height=24).pack(side="right")
 
             body = ttk.Frame(inner, style="Card.TFrame")
             body.pack(fill="x")
@@ -651,26 +659,26 @@ class ToolboxApp:
         self.refresh_tool_list()
 
     def add_category(self) -> None:
-        name = simpledialog.askstring("新增分类", "请输入分类名称：", parent=self.root)
+        name = simpledialog.askstring("新增分组", "请输入分组名称：", parent=self.root)
         if not name:
             return
         name = name.strip()
         categories = self.config.data.setdefault("categories", [])
         if not name or name in categories:
-            messagebox.showwarning("提示", "分类名称不能为空或重复。", parent=self.root)
+            messagebox.showwarning("提示", "分组名称不能为空或重复。", parent=self.root)
             return
         categories.append(name)
         self.config.save()
         self.refresh_tool_list()
 
     def rename_category(self, old_name: str) -> None:
-        new_name = simpledialog.askstring("分类改名", "请输入新的分类名称：", initialvalue=old_name, parent=self.root)
+        new_name = simpledialog.askstring("分组改名", "请输入新的分组名称：", initialvalue=old_name, parent=self.root)
         if not new_name:
             return
         new_name = new_name.strip()
         categories = self.config.data.setdefault("categories", [])
         if not new_name or (new_name in categories and new_name != old_name):
-            messagebox.showwarning("提示", "分类名称不能为空或重复。", parent=self.root)
+            messagebox.showwarning("提示", "分组名称不能为空或重复。", parent=self.root)
             return
         self.config.data["categories"] = [new_name if c == old_name else c for c in categories]
         orders = self.config.data.setdefault("tool_orders", {})
@@ -685,10 +693,10 @@ class ToolboxApp:
     def delete_category(self, category: str) -> None:
         categories = self.config.data.setdefault("categories", [])
         if len(categories) <= 1:
-            messagebox.showwarning("提示", "至少保留一个分类。", parent=self.root)
+            messagebox.showwarning("提示", "至少保留一个分组。", parent=self.root)
             return
         target = next((c for c in categories if c != category), None)
-        if not messagebox.askyesno("删除分类", f"确认删除分类“{category}”？其中工具将移动到“{target}”。", parent=self.root):
+        if not messagebox.askyesno("删除分组", f"确认删除分组“{category}”？其中工具将移动到“{target}”。", parent=self.root):
             return
         self.config.data["categories"] = [c for c in categories if c != category]
         orders = self.config.data.setdefault("tool_orders", {})
@@ -699,6 +707,21 @@ class ToolboxApp:
                 self.config.data["tool_categories"][key] = target
         self._normalize_tool_orders()
         self.config.save()
+        self.refresh_tool_list()
+
+    def open_group_run(self, category: str) -> None:
+        self.drag_data = {}
+        if self.current_tool_frame is not None:
+            try:
+                self.current_tool_frame.save_description()
+                self.current_tool_frame.save_state()
+            except Exception:
+                pass
+            self.current_tool_frame.destroy()
+        tool_keys = self.tools_in_category(category)
+        self.current_tool_key = None
+        self.current_tool_frame = GroupRunFrame(self.content, self, category, tool_keys)
+        self.current_tool_frame.pack(fill="both", expand=True)
         self.refresh_tool_list()
 
     def open_tool(self, key: str) -> None:
@@ -726,3 +749,229 @@ class ToolboxApp:
 
     def run(self) -> None:
         self.root.mainloop()
+
+class GroupRunFrame(BaseToolFrame):
+    """按分组顺序一键执行多个工具。"""
+
+    def __init__(self, parent: tk.Widget, app: "ToolboxApp", category: str, tool_keys: list[str]) -> None:
+        self.category = category
+        self.tool_keys = tool_keys
+        super().__init__(parent, app, {}, f"一键执行“{category}”分组中的 {len(tool_keys)} 个工具。账号表、帖表、字典表共用；每个工具可单独选择字典 sheet，并沿用该工具已保存的其他设置。")
+        self.account_input_var = tk.StringVar(value="")
+        self.post_input_var = tk.StringVar(value="")
+        self.dictionary_input_var = tk.StringVar(value="")
+        self.output_var = tk.StringVar(value="")
+        self.account_sheet_var = tk.StringVar(value="")
+        self.post_sheet_var = tk.StringVar(value="")
+        self.status_var = tk.StringVar(value="请选择共用表格后开始一键执行。")
+        self.progress_text_var = tk.StringVar(value=f"0/{len(tool_keys)}")
+        self.progress_var = tk.DoubleVar(value=0)
+        self.dictionary_sheet_vars: dict[str, tk.StringVar] = {}
+        self._batch_frames: list[BaseToolFrame] = []
+        self._batch_index = 0
+        self._current_account_path = ""
+        self._temp_dir: str | None = None
+        self._original_showinfo: Callable[..., object] | None = None
+        self._build_form()
+
+    def save_state(self) -> None:
+        return
+
+    def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
+
+    def _build_form(self) -> None:
+        form = ttk.LabelFrame(self, text=f"{self.category} - 一键执行", style="Card.TLabelframe", padding=(12, 9))
+        form.pack(fill="x", padx=22, pady=12)
+        self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
+        self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
+        self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
+        self._path_row(form, 3, "最终输出 Excel：", self.output_var, self.choose_output)
+        self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
+        self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
+        form.columnconfigure(1, weight=1)
+
+        list_card = ttk.LabelFrame(self, text="分组工具", style="Card.TLabelframe", padding=(12, 9))
+        list_card.pack(fill="both", expand=True, padx=22, pady=8)
+        for index, key in enumerate(self.tool_keys, start=1):
+            tool = self.app.tools[key]
+            row = ttk.Frame(list_card, style="Card.TFrame")
+            row.pack(fill="x", pady=4)
+            ttk.Label(row, text=f"{index}. {tool.name}", background=COLOR_SURFACE).pack(side="left", fill="x", expand=True)
+            var = tk.StringVar(value=self.app.config.get_tool_state(key).get("dictionary_sheet_name", ""))
+            self.dictionary_sheet_vars[key] = var
+            combo = ttk.Combobox(row, textvariable=var, state="readonly", values=(), width=22)
+            combo.pack(side="right")
+            ttk.Label(row, text="字典 sheet：", background=COLOR_SURFACE, foreground=COLOR_MUTED).pack(side="right", padx=(0, 4))
+
+        actions = ttk.Frame(self, style="Surface.TFrame")
+        actions.pack(fill="x", padx=22, pady=12)
+        make_rounded_button(actions, "一键执行", self.run_batch, role="primary", width=82).pack(side="left")
+        ttk.Progressbar(actions, variable=self.progress_var, maximum=max(1, len(self.tool_keys)), length=260).pack(side="left", padx=12)
+        ttk.Label(actions, textvariable=self.progress_text_var, style="Muted.TLabel").pack(side="left")
+        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
+        status_card.pack(fill="x", padx=22, pady=8)
+        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
+
+    def choose_account_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择账号 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.account_input_var.set(path)
+            self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
+
+    def choose_post_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择帖 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.post_input_var.set(path)
+            self.use_first_sheet_by_default(self.post_sheet_combo, self.post_sheet_var)
+
+    def choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(title="保存最终账号表处理结果", defaultextension=".xlsx", filetypes=[("Excel 文件", "*.xlsx")])
+        if path:
+            self.output_var.set(path)
+
+    def choose_dictionary_input(self) -> None:
+        path = filedialog.askopenfilename(title="选择字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
+        if path:
+            self.dictionary_input_var.set(path)
+            for widget in self._dictionary_combos():
+                self.populate_sheets_async(path, widget[1], widget[0], show_errors=True)
+
+    def _dictionary_combos(self) -> list[tuple[tk.StringVar, ttk.Combobox]]:
+        combos: list[tuple[tk.StringVar, ttk.Combobox]] = []
+        def walk(w: tk.Widget) -> None:
+            if isinstance(w, ttk.Combobox):
+                for key, var in self.dictionary_sheet_vars.items():
+                    if str(w.cget("textvariable")) == str(var):
+                        combos.append((var, w)); break
+            for child in w.winfo_children():
+                walk(child)
+        walk(self)
+        return combos
+
+    def run_batch(self) -> None:
+        if not self.tool_keys:
+            messagebox.showinfo("提示", "当前分组没有工具。", parent=self); return
+        if not self.account_input_var.get().strip():
+            messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
+        if not self.output_var.get().strip():
+            messagebox.showwarning("提示", "请选择最终输出 Excel。", parent=self); return
+        self._batch_frames = []
+        self._batch_index = 0
+        self._current_account_path = self.account_input_var.get().strip()
+        if self._temp_dir:
+            shutil.rmtree(self._temp_dir, ignore_errors=True)
+        self._temp_dir = tempfile.mkdtemp(prefix="jy_group_run_")
+        if self._original_showinfo is None:
+            self._original_showinfo = messagebox.showinfo
+            messagebox.showinfo = lambda *args, **kwargs: None
+        self.progress_var.set(0)
+        self.progress_text_var.set(f"0/{len(self.tool_keys)}")
+        self.status_var.set("正在准备一键执行……")
+        self._run_next_tool()
+
+    def _run_next_tool(self) -> None:
+        if self._batch_index >= len(self.tool_keys):
+            self.status_var.set("一键执行完成。")
+            self._restore_showinfo()
+            self._cleanup_temp_dir()
+            BatchCompleteDialog(self, Path(self.output_var.get().strip()))
+            return
+        key = self.tool_keys[self._batch_index]
+        tool = self.app.tools[key]
+        frame = tool.factory(self, self.app, self.app.config.get_tool_state(key))
+        frame.pack_forget()
+        self._patch_frame_error_handler(frame)
+        self._batch_frames.append(frame)
+        step_output_path = self._step_output_path(key)
+        values = (
+            ("account_input_var", self._current_account_path),
+            ("post_input_var", self.post_input_var.get().strip()),
+            ("dictionary_input_var", self.dictionary_input_var.get().strip()),
+            ("output_var", step_output_path),
+            ("account_sheet_var", self.account_sheet_var.get().strip() if self._batch_index == 0 else ""),
+            ("post_sheet_var", self.post_sheet_var.get().strip()),
+            ("dictionary_sheet_var", self.dictionary_sheet_vars[key].get().strip()),
+        )
+        for attr, value in values:
+            if hasattr(frame, attr):
+                getattr(frame, attr).set(value)
+        self.status_var.set(f"正在执行：{tool.name}")
+        frame.run()
+        if not getattr(frame, "_background_running", False):
+            self._restore_showinfo()
+            self._cleanup_temp_dir()
+            self.status_var.set(f"一键执行已中断：{tool.name} 未启动。")
+            return
+        self.after(300, lambda f=frame, k=key: self._wait_tool_done(f, k))
+
+    def _patch_frame_error_handler(self, frame: BaseToolFrame) -> None:
+        original_error = frame._finish_background_error
+        def finish_error(exc: Exception, error_message: str) -> None:
+            self._restore_showinfo()
+            self._cleanup_temp_dir()
+            self.status_var.set("一键执行已中断，请处理失败工具后重试。")
+            original_error(exc, error_message)
+        frame._finish_background_error = finish_error  # type: ignore[method-assign]
+
+    def _restore_showinfo(self) -> None:
+        if self._original_showinfo is not None:
+            messagebox.showinfo = self._original_showinfo
+            self._original_showinfo = None
+
+    def _wait_tool_done(self, frame: BaseToolFrame, key: str) -> None:
+        if getattr(frame, "_background_running", False):
+            self.after(300, lambda: self._wait_tool_done(frame, key))
+            return
+        if hasattr(frame, "account_input_var") and hasattr(frame, "output_var"):
+            output_path = getattr(frame, "output_var").get().strip()
+            if output_path:
+                self._current_account_path = output_path
+        self._batch_index += 1
+        self.progress_var.set(self._batch_index)
+        self.progress_text_var.set(f"{self._batch_index}/{len(self.tool_keys)}")
+        self.after(100, self._run_next_tool)
+
+    def _step_output_path(self, key: str) -> str:
+        if self._batch_index == len(self.tool_keys) - 1:
+            return self.output_var.get().strip()
+        temp_dir = Path(self._temp_dir or tempfile.mkdtemp(prefix="jy_group_run_"))
+        self._temp_dir = str(temp_dir)
+        safe_key = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in key)
+        return str(temp_dir / f"{self._batch_index + 1:02d}_{safe_key}.xlsx")
+
+    def _cleanup_temp_dir(self) -> None:
+        if self._temp_dir:
+            shutil.rmtree(self._temp_dir, ignore_errors=True)
+            self._temp_dir = None
+
+class BatchCompleteDialog(tk.Toplevel):
+    """一键执行完成提示，支持打开最终输出目录。"""
+
+    def __init__(self, parent: tk.Widget, output_path: Path) -> None:
+        super().__init__(parent)
+        self.output_path = output_path
+        self.title("完成")
+        self.configure(bg=COLOR_BG)
+        self.transient(parent.winfo_toplevel())
+        self.grab_set()
+
+        shell = ttk.Frame(self, style="Surface.TFrame", padding=(18, 16))
+        shell.pack(fill="both", expand=True)
+        ttk.Label(shell, text=f"分组工具已全部执行完成。\n最终输出：{output_path}", wraplength=520).pack(anchor="w")
+        buttons = ttk.Frame(shell, style="Surface.TFrame")
+        buttons.pack(fill="x", pady=(16, 0))
+        make_rounded_button(buttons, "关闭", self.destroy, width=62).pack(side="right")
+        make_rounded_button(buttons, "打开文件所在目录", self.open_output_folder, role="primary", width=132).pack(side="right", padx=(0, 8))
+
+    def open_output_folder(self) -> None:
+        folder = self.output_path.parent
+        if sys.platform.startswith("win"):
+            os.startfile(folder)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(folder)])
+        else:
+            subprocess.Popen(["xdg-open", str(folder)])
+        self.destroy()

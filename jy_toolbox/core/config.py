@@ -7,7 +7,7 @@ from typing import Any
 from jy_toolbox.core.constants import CONFIG_DIR, CONFIG_FILE
 
 class ConfigStore:
-    """把全局设置、分类设置和每个工具自己的表单状态保存到本地 JSON。"""
+    """把全局设置、分组设置和每个工具自己的表单状态保存到本地 JSON。"""
 
     def __init__(self, path: Path = CONFIG_FILE) -> None:
         self.path = path
