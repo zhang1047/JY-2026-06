@@ -24,6 +24,7 @@ from jy_toolbox.ui.tools import (
     SentimentExpressionTool,
     SourceMediaCampRatioTool,
     StanceTendencyTool,
+    WeeklyPostFrequencyTool,
 )
 from jy_toolbox.ui.base import BaseToolFrame
 from jy_toolbox.ui.widgets import make_rounded_button, rounded_rect_points
@@ -216,6 +217,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
                     parent, app, state, app.get_tool_description("average_daily_original_posts")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="weekly_post_frequency",
+                name="每周发布帖子频率（次）",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "按每个账号最早到最晚的贴文发布时间计算间隔周数，"
+                    "用该账号总发帖数除以间隔周数，并在账号表最后新增“每周发布帖子频率（次）”列。"
+                ),
+                factory=lambda parent, app, state: WeeklyPostFrequencyTool(
+                    parent, app, state, app.get_tool_description("weekly_post_frequency")
                 ),
             )
         )
