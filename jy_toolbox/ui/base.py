@@ -22,8 +22,8 @@ class BaseToolFrame(ttk.Frame):
         self._sheet_loading_seq: dict[int, int] = {}
         self._sheet_loading_pending: dict[int, str] = {}
         self._sheet_status_before_loading = ""
-        self.progress_var = tk.DoubleVar(value=0)
-        self.progress_bar: ttk.Progressbar | None = None
+        self.processing_var = tk.StringVar(value="")
+        self.processing_label: ttk.Label | None = None
 
         desc_row = ttk.Frame(self, style="Surface.TFrame")
         desc_row.pack(fill="x", padx=22, pady=(8, 6))
@@ -80,11 +80,11 @@ class BaseToolFrame(ttk.Frame):
     def save_state(self) -> None:
         raise NotImplementedError
 
-    def add_progress_bar(self, parent: tk.Widget) -> ttk.Progressbar:
-        """为工具动作增加统一进度条；实际耗时任务必须通过后台线程执行。"""
-        self.progress_bar = ttk.Progressbar(parent, variable=self.progress_var, maximum=100, mode="determinate")
-        self.progress_bar.pack(fill="x", pady=(8, 0))
-        return self.progress_bar
+    def add_processing_label(self, parent: tk.Widget) -> ttk.Label:
+        """在开始按钮旁显示后台执行状态。"""
+        self.processing_label = ttk.Label(parent, textvariable=self.processing_var, style="Muted.TLabel")
+        self.processing_label.pack(side="left", padx=(10, 0))
+        return self.processing_label
 
     def add_sheet_selector(
         self,
@@ -246,7 +246,6 @@ class BaseToolFrame(ttk.Frame):
             messagebox.showwarning("提示", message, parent=self)
 
     def set_progress(self, value: float, message: str | None = None) -> None:
-        self.progress_var.set(max(0, min(100, value)))
         if message is not None and hasattr(self, "status_var"):
             self.status_var.set(message)
 
@@ -262,9 +261,7 @@ class BaseToolFrame(ttk.Frame):
             messagebox.showinfo("提示", "当前工具正在后台执行，请等待完成。", parent=self)
             return
         self._background_running = True
-        if self.progress_bar is not None:
-            self.progress_bar.configure(mode="indeterminate")
-            self.progress_bar.start(12)
+        self.processing_var.set("正在处理...")
         self.set_progress(0, start_message)
 
         def progress(value: float, message: str | None = None) -> None:
@@ -282,16 +279,12 @@ class BaseToolFrame(ttk.Frame):
 
     def _finish_background_success(self, result: Any, on_success: Callable[[Any], None]) -> None:
         self._background_running = False
-        if self.progress_bar is not None:
-            self.progress_bar.stop()
-            self.progress_bar.configure(mode="determinate")
+        self.processing_var.set("")
         self.set_progress(100)
         on_success(result)
 
     def _finish_background_error(self, exc: Exception, error_message: str) -> None:
         self._background_running = False
-        if self.progress_bar is not None:
-            self.progress_bar.stop()
-            self.progress_bar.configure(mode="determinate")
+        self.processing_var.set("")
         self.set_progress(0, error_message)
         messagebox.showerror("处理失败", str(exc), parent=self)
