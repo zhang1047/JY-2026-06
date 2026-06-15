@@ -17,6 +17,7 @@ from jy_toolbox.ui.tools import (
     AveragePostLengthTool,
     DailyActiveSpanTool,
     PostDedupTool,
+    PostingPeriodTypeTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
     SensitiveTopicParticipationRateTool,
@@ -77,6 +78,22 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: PostTypeRatioTool(
                     parent, app, state, app.get_tool_description("post_type_ratio")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="posting_period_type",
+                name="高频发帖时段类型",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel、贴文 Excel 和发帖时段字典 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "按字典中的“时段类型 / 起始时段 / 结束时段”动态判断每条贴文发布时间所属时段，"
+                    "再按账号写回“高频发帖时段”和“高频发帖类型”。若账号在所有字典时段均有发帖且各时段占比差值不高于 10%，"
+                    "则写为混乱型且不写回具体时段。"
+                ),
+                factory=lambda parent, app, state: PostingPeriodTypeTool(
+                    parent, app, state, app.get_tool_description("posting_period_type")
                 ),
             )
         )
