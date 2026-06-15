@@ -767,6 +767,10 @@ class GroupRunFrame(BaseToolFrame):
         self.progress_text_var = tk.StringVar(value=f"0/{len(tool_keys)}")
         self.progress_var = tk.DoubleVar(value=0)
         self.dictionary_sheet_vars: dict[str, tk.StringVar] = {}
+        self.dictionary_sheet_combos: dict[str, ttk.Combobox] = {}
+        self.custom_keyword_text_vars: dict[str, tk.StringVar] = {}
+        self.custom_keyword_input_vars: dict[str, tk.StringVar] = {}
+        self.custom_ignore_script_vars: dict[str, tk.BooleanVar] = {}
         self._batch_frames: list[BaseToolFrame] = []
         self._batch_index = 0
         self._current_account_path = ""
@@ -782,12 +786,93 @@ class GroupRunFrame(BaseToolFrame):
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, padx=10, pady=8)
 
+    def _tool_needs_dictionary_sheet(self, key: str) -> bool:
+        return key in {
+            "posting_period_type",
+            "source_media_camp_ratio",
+            "post_theme_ratio",
+            "sentiment_expression",
+            "stance_tendency",
+            "sensitive_topic_participation_rate",
+        }
+
+    def _tool_needs_common_dictionary(self, key: str) -> bool:
+        return self._tool_needs_dictionary_sheet(key)
+
+    def _tool_has_extra_group_settings(self, key: str) -> bool:
+        return key == "custom_keyword_frequency"
+
+    def _add_custom_keyword_setting_row(self, parent: tk.Widget, key: str) -> None:
+        state = self.app.config.get_tool_state(key)
+        keywords = [str(item).strip() for item in state.get("keywords", []) if str(item).strip()]
+        text_var = tk.StringVar(value="\n".join(keywords))
+        input_var = tk.StringVar(value="")
+        ignore_var = tk.BooleanVar(value=bool(state.get("ignore_chinese_script", False)))
+        self.custom_keyword_text_vars[key] = text_var
+        self.custom_keyword_input_vars[key] = input_var
+        self.custom_ignore_script_vars[key] = ignore_var
+
+        box = ttk.Frame(parent, style="Card.TFrame")
+        box.pack(fill="x", padx=(28, 0), pady=(2, 8))
+        ttk.Label(box, text="自定义关键词：", background=COLOR_SURFACE, foreground=COLOR_MUTED).grid(row=0, column=0, sticky="nw", padx=(0, 6), pady=4)
+        entry = ttk.Entry(box, textvariable=input_var)
+        entry.grid(row=0, column=1, sticky="ew", pady=4)
+        make_rounded_button(box, "新增", lambda k=key: self._add_group_keyword(k), width=54).grid(row=0, column=2, padx=6, pady=4)
+        make_rounded_button(box, "转繁体", lambda k=key: self._convert_group_keywords(k, True), width=66).grid(row=0, column=3, padx=6, pady=4)
+        make_rounded_button(box, "转简体", lambda k=key: self._convert_group_keywords(k, False), width=66).grid(row=0, column=4, padx=6, pady=4)
+        ttk.Checkbutton(box, text="不区分简繁体", variable=ignore_var).grid(row=0, column=5, padx=6, pady=4, sticky="w")
+        text = tk.Text(box, height=4, wrap="word", bg="white", relief="solid", borderwidth=1)
+        text._tool_key = key  # type: ignore[attr-defined]
+        text.insert("1.0", text_var.get())
+        text.grid(row=1, column=1, columnspan=5, sticky="ew", pady=(0, 4))
+        text.bind("<KeyRelease>", lambda _e, v=text_var, w=text: v.set(w.get("1.0", "end").strip()))
+        entry.bind("<Return>", lambda _e, k=key: (self._add_group_keyword(k), "break")[-1])
+        box.keyword_text_widget = text  # type: ignore[attr-defined]
+        box.columnconfigure(1, weight=1)
+
+    def _group_keywords(self, key: str) -> list[str]:
+        raw = self.custom_keyword_text_vars[key].get().replace("，", "\n").replace(",", "\n")
+        return list(dict.fromkeys(item.strip() for item in raw.splitlines() if item.strip()))
+
+    def _set_group_keywords(self, key: str, keywords: list[str]) -> None:
+        value = "\n".join(keywords)
+        self.custom_keyword_text_vars[key].set(value)
+        for widget in self._keyword_text_widgets():
+            if getattr(widget, "_tool_key", None) == key:
+                widget.delete("1.0", "end")
+                widget.insert("1.0", value)
+
+    def _keyword_text_widgets(self) -> list[tk.Text]:
+        widgets: list[tk.Text] = []
+        def walk(w: tk.Widget) -> None:
+            if isinstance(w, tk.Text):
+                widgets.append(w)
+            for child in w.winfo_children():
+                walk(child)
+        walk(self)
+        return widgets
+
+    def _add_group_keyword(self, key: str) -> None:
+        keyword = self.custom_keyword_input_vars[key].get().strip()
+        if not keyword:
+            return
+        keywords = self._group_keywords(key)
+        if keyword not in keywords:
+            keywords.append(keyword)
+        self.custom_keyword_input_vars[key].set("")
+        self._set_group_keywords(key, keywords)
+
+    def _convert_group_keywords(self, key: str, to_traditional: bool) -> None:
+        from jy_toolbox.core.chinese import convert_chinese_text
+        self._set_group_keywords(key, list(dict.fromkeys(convert_chinese_text(item, to_traditional=to_traditional) for item in self._group_keywords(key))))
+
     def _build_form(self) -> None:
         form = ttk.LabelFrame(self, text=f"{self.category} - 一键执行", style="Card.TLabelframe", padding=(12, 9))
         form.pack(fill="x", padx=22, pady=12)
         self._path_row(form, 0, "账号 Excel：", self.account_input_var, self.choose_account_input)
         self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
-        self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
+        if any(self._tool_needs_common_dictionary(key) for key in self.tool_keys):
+            self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
         self._path_row(form, 3, "最终输出 Excel：", self.output_var, self.choose_output)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
         self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
@@ -795,16 +880,30 @@ class GroupRunFrame(BaseToolFrame):
 
         list_card = ttk.LabelFrame(self, text="分组工具", style="Card.TLabelframe", padding=(12, 9))
         list_card.pack(fill="both", expand=True, padx=22, pady=8)
+        canvas = tk.Canvas(list_card, highlightthickness=0, bg=COLOR_SURFACE)
+        scrollbar = ttk.Scrollbar(list_card, orient="vertical", command=canvas.yview)
+        tools_body = ttk.Frame(canvas, style="Card.TFrame")
+        window_id = canvas.create_window((0, 0), window=tools_body, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        tools_body.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=event.width))
+        canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1 * (event.delta / 120)), "units") if canvas.winfo_ismapped() else None)
         for index, key in enumerate(self.tool_keys, start=1):
             tool = self.app.tools[key]
-            row = ttk.Frame(list_card, style="Card.TFrame")
+            row = ttk.Frame(tools_body, style="Card.TFrame")
             row.pack(fill="x", pady=4)
             ttk.Label(row, text=f"{index}. {tool.name}", background=COLOR_SURFACE).pack(side="left", fill="x", expand=True)
-            var = tk.StringVar(value=self.app.config.get_tool_state(key).get("dictionary_sheet_name", ""))
-            self.dictionary_sheet_vars[key] = var
-            combo = ttk.Combobox(row, textvariable=var, state="readonly", values=(), width=22)
-            combo.pack(side="right")
-            ttk.Label(row, text="字典 sheet：", background=COLOR_SURFACE, foreground=COLOR_MUTED).pack(side="right", padx=(0, 4))
+            if self._tool_needs_dictionary_sheet(key):
+                var = tk.StringVar(value=self.app.config.get_tool_state(key).get("dictionary_sheet_name", ""))
+                self.dictionary_sheet_vars[key] = var
+                combo = ttk.Combobox(row, textvariable=var, state="readonly", values=(), width=22)
+                self.dictionary_sheet_combos[key] = combo
+                combo.pack(side="right")
+                ttk.Label(row, text="字典 sheet：", background=COLOR_SURFACE, foreground=COLOR_MUTED).pack(side="right", padx=(0, 4))
+            if self._tool_has_extra_group_settings(key):
+                self._add_custom_keyword_setting_row(tools_body, key)
 
         actions = ttk.Frame(self, style="Surface.TFrame")
         actions.pack(fill="x", padx=22, pady=12)
@@ -840,22 +939,15 @@ class GroupRunFrame(BaseToolFrame):
                 self.populate_sheets_async(path, widget[1], widget[0], show_errors=True)
 
     def _dictionary_combos(self) -> list[tuple[tk.StringVar, ttk.Combobox]]:
-        combos: list[tuple[tk.StringVar, ttk.Combobox]] = []
-        def walk(w: tk.Widget) -> None:
-            if isinstance(w, ttk.Combobox):
-                for key, var in self.dictionary_sheet_vars.items():
-                    if str(w.cget("textvariable")) == str(var):
-                        combos.append((var, w)); break
-            for child in w.winfo_children():
-                walk(child)
-        walk(self)
-        return combos
+        return [(self.dictionary_sheet_vars[key], combo) for key, combo in self.dictionary_sheet_combos.items()]
 
     def run_batch(self) -> None:
         if not self.tool_keys:
             messagebox.showinfo("提示", "当前分组没有工具。", parent=self); return
         if not self.account_input_var.get().strip():
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
+        if any(self._tool_needs_common_dictionary(key) for key in self.tool_keys) and not self.dictionary_input_var.get().strip():
+            messagebox.showwarning("提示", "当前分组包含需要字典 Excel 的工具，请选择字典 Excel。", parent=self); return
         if not self.output_var.get().strip():
             messagebox.showwarning("提示", "请选择最终输出 Excel。", parent=self); return
         self._batch_frames = []
@@ -893,11 +985,17 @@ class GroupRunFrame(BaseToolFrame):
             ("output_var", step_output_path),
             ("account_sheet_var", self.account_sheet_var.get().strip() if self._batch_index == 0 else ""),
             ("post_sheet_var", self.post_sheet_var.get().strip()),
-            ("dictionary_sheet_var", self.dictionary_sheet_vars[key].get().strip()),
+            ("dictionary_sheet_var", self.dictionary_sheet_vars[key].get().strip() if key in self.dictionary_sheet_vars else ""),
         )
         for attr, value in values:
             if hasattr(frame, attr):
                 getattr(frame, attr).set(value)
+        if key == "custom_keyword_frequency":
+            frame.keywords = self._group_keywords(key)
+            if hasattr(frame, "ignore_chinese_script_var"):
+                frame.ignore_chinese_script_var.set(self.custom_ignore_script_vars[key].get())
+            if hasattr(frame, "refresh_keyword_listbox"):
+                frame.refresh_keyword_listbox()
         self.status_var.set(f"正在执行：{tool.name}")
         frame.run()
         if not getattr(frame, "_background_running", False):
