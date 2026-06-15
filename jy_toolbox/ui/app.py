@@ -783,13 +783,16 @@ class GroupRunFrame(BaseToolFrame):
     def save_state(self) -> None:
         return
 
-    def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None]) -> None:
+    def _path_row(self, parent: ttk.LabelFrame, row: int, label: str, var: tk.StringVar, command: Callable[[], None] | None) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
+        entry_state = "readonly" if label.startswith("最终输出 Excel") else "normal"
+        ttk.Entry(parent, textvariable=var, state=entry_state).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         if label == "字典 Excel：":
             ttk.Label(parent, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).grid(row=row, column=2, sticky="e", padx=(10, 4), pady=8)
             make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=(4, 10), pady=8)
-        else:
+        elif label.startswith("最终输出 Excel"):
+            ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=3, sticky="w", padx=10, pady=8)
+        elif command is not None:
             make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, padx=10, pady=8)
 
     def _tool_needs_dictionary_sheet(self, key: str) -> bool:
@@ -876,7 +879,7 @@ class GroupRunFrame(BaseToolFrame):
         self._path_row(form, 1, "帖 Excel：", self.post_input_var, self.choose_post_input)
         if any(self._tool_needs_common_dictionary(key) for key in self.tool_keys):
             self._path_row(form, 2, "字典 Excel：", self.dictionary_input_var, self.choose_dictionary_input)
-        self._path_row(form, 3, "最终输出 Excel：", self.output_var, self.choose_output)
+        self._path_row(form, 3, "最终输出 Excel：", self.output_var, None)
         self.account_sheet_combo = self.add_sheet_selector(form, 4, "账号表工作表：", self.account_sheet_var)
         self.post_sheet_combo = self.add_sheet_selector(form, 5, "帖表工作表：", self.post_sheet_var)
         form.columnconfigure(1, weight=1)
@@ -949,10 +952,20 @@ class GroupRunFrame(BaseToolFrame):
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
 
+    def _default_output_path(self, account_path: str) -> str:
+        path = Path(account_path)
+        return str(path.with_name(f"{path.stem}_一键执行结果.xlsx"))
+
+    def _ensure_output_path(self) -> None:
+        account_path = self.account_input_var.get().strip()
+        if account_path and not self.output_var.get().strip():
+            self.output_var.set(self._default_output_path(account_path))
+
     def choose_account_input(self) -> None:
         path = filedialog.askopenfilename(title="选择账号 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.account_input_var.set(path)
+            self.output_var.set(self._default_output_path(path))
             self.use_first_sheet_by_default(self.account_sheet_combo, self.account_sheet_var)
 
     def choose_post_input(self) -> None:
@@ -992,8 +1005,9 @@ class GroupRunFrame(BaseToolFrame):
             messagebox.showwarning("提示", "请选择账号 Excel。", parent=self); return
         if any(self._tool_needs_common_dictionary(key) for key in self.tool_keys) and not self.dictionary_input_var.get().strip():
             messagebox.showwarning("提示", "当前分组包含需要字典 Excel 的工具，请选择字典 Excel。", parent=self); return
+        self._ensure_output_path()
         if not self.output_var.get().strip():
-            messagebox.showwarning("提示", "请选择最终输出 Excel。", parent=self); return
+            messagebox.showwarning("提示", "请先选择账号 Excel，系统会自动生成最终输出 Excel。", parent=self); return
         self._batch_frames = []
         self._batch_index = 0
         self._current_account_path = self.account_input_var.get().strip()
