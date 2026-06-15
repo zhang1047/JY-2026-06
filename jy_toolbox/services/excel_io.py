@@ -53,6 +53,34 @@ def _read_decrypted_excel(path: Path, passwords: list[str], reader: Callable[[st
     raise RuntimeError(f"{failure_prefix}：已按密码本逐个尝试，但没有密码可以打开该 Excel。") from last_error
 
 
+def canonicalize_excel_columns(data: Any) -> Any:
+    """Normalize current post-table headers to legacy internal names.
+
+    The UI and analytics code historically used short column names such as
+    ``帖url`` and ``帖正文``.  Newer exported post tables use ``帖文url`` and
+    ``帖子正文``.  Renaming at the Excel boundary keeps old workbooks working
+    while accepting the current header set everywhere.
+    """
+    if not hasattr(data, "columns"):
+        return data
+    aliases = {
+        "帖文url": "帖url",
+        "帖子正文": "帖正文",
+        "帖文发布时间": "帖发布时间",
+        "分享帖id": "分享贴id",
+        "分享帖账号id": "分享贴账号id",
+        "分享帖账号名": "分享贴账号名",
+        "分享帖账号主页": "分享贴账号主页",
+    }
+    rename_map: dict[Any, str] = {}
+    existing = set(data.columns)
+    for source, target in aliases.items():
+        if source in existing and target not in existing:
+            rename_map[source] = target
+    if rename_map:
+        return data.rename(columns=rename_map)
+    return data
+
 def list_excel_sheet_names_with_passwords(path: Path, passwords: list[str]) -> list[str]:
     """列出普通或加密 Excel 的工作表名称。"""
     import pandas as pd
@@ -76,13 +104,15 @@ def read_excel_with_passwords(path: Path, passwords: list[str], sheet_name: str 
     import pandas as pd
 
     try:
-        return pd.read_excel(path, sheet_name=sheet_name, **read_excel_kwargs)
+        return canonicalize_excel_columns(pd.read_excel(path, sheet_name=sheet_name, **read_excel_kwargs))
     except Exception as first_error:  # noqa: BLE001 - 需要判断是否可用密码继续尝试
         try:
             return _read_decrypted_excel(
                 path,
                 passwords,
-                lambda tmp_name: pd.read_excel(tmp_name, sheet_name=sheet_name, **read_excel_kwargs),
+                lambda tmp_name: canonicalize_excel_columns(
+                    pd.read_excel(tmp_name, sheet_name=sheet_name, **read_excel_kwargs)
+                ),
                 "读取失败",
             )
         except RuntimeError as encrypted_error:
