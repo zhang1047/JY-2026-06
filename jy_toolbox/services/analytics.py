@@ -30,6 +30,8 @@ STANCE_OUTPUT_COLUMNS = (
     "立场倾向-中立（占比）",
 )
 
+POSTING_PERIOD_OUTPUT_COLUMNS = ("高频发帖时段", "高频发帖类型")
+
 
 def deduplicate_posts_excel(
     input_path: Path,
@@ -77,6 +79,162 @@ def _is_non_empty_cell(value: Any) -> bool:
 
 def _normalized_key(value: Any) -> str:
     return str(value).strip() if _is_non_empty_cell(value) else ""
+
+def _parse_time_seconds(value: Any) -> int | None:
+    import pandas as pd
+
+    if not _is_non_empty_cell(value):
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute") and hasattr(value, "second"):
+        return int(value.hour) * 3600 + int(value.minute) * 60 + int(value.second)
+    text = str(value).strip()
+    parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return int(parsed.hour) * 3600 + int(parsed.minute) * 60 + int(parsed.second)
+
+def _format_time_seconds(seconds: int) -> str:
+    seconds %= 24 * 3600
+    hour = seconds // 3600
+    minute = (seconds % 3600) // 60
+    second = seconds % 60
+    return f"{hour}:{minute:02d}:{second:02d}"
+
+def _time_in_range(seconds: int, start: int, end: int) -> bool:
+    if start <= end:
+        return start <= seconds <= end
+    return seconds >= start or seconds <= end
+
+def calculate_posting_period_type_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    dictionary_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    dictionary_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    import pandas as pd
+
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+    if not dictionary_input_path.exists():
+        raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(25, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+    if progress is not None:
+        progress(40, "正在后台读取发帖时段字典 Excel……")
+    dictionary_df = read_excel_with_passwords(dictionary_input_path, passwords, dictionary_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+    missing_dictionary = [col for col in ["时段类型", "起始时段", "结束时段"] if col not in dictionary_df.columns]
+    if missing_dictionary:
+        raise ValueError(f"字典 Excel 缺少必要列：{', '.join(missing_dictionary)}")
+
+    periods: list[dict[str, Any]] = []
+    disorder_type = "混乱型"
+    for _, row in dictionary_df.iterrows():
+        period_type = _normalized_key(row.get("时段类型"))
+        start = _parse_time_seconds(row.get("起始时段"))
+        end = _parse_time_seconds(row.get("结束时段"))
+        if start is None or end is None:
+            if period_type:
+                disorder_type = period_type
+            continue
+        periods.append({
+            "type": period_type,
+            "start": start,
+            "end": end,
+            "range": f"{_format_time_seconds(start)}~{_format_time_seconds(end)}",
+        })
+    if not periods:
+        raise ValueError("字典 Excel 中没有可用的时段定义。")
+
+    if progress is not None:
+        progress(58, "正在按贴文发布时间匹配发帖时段……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce", format="mixed")
+    work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
+    work["__seconds__"] = (
+        work["__post_datetime__"].dt.hour * 3600
+        + work["__post_datetime__"].dt.minute * 60
+        + work["__post_datetime__"].dt.second
+    )
+
+    def match_period(seconds: int) -> str:
+        for index, period in enumerate(periods):
+            if _time_in_range(int(seconds), int(period["start"]), int(period["end"])):
+                return str(index)
+        return ""
+
+    work["__period_index__"] = work["__seconds__"].map(match_period)
+    matched_work = work[work["__period_index__"] != ""].copy()
+
+    if progress is not None:
+        progress(75, "正在按账号计算高频发帖时段类型……")
+    result_by_homepage: dict[str, dict[str, str]] = {}
+    for homepage, homepage_rows in matched_work.groupby("__homepage_key__", sort=False):
+        counts = {int(index): 0 for index in range(len(periods))}
+        for index, count in homepage_rows["__period_index__"].value_counts(sort=False).items():
+            counts[int(index)] = int(count)
+        total = sum(counts.values())
+        if total <= 0:
+            continue
+        values = [counts[index] / total * 100 for index in range(len(periods))]
+        is_disorder = all(counts[index] > 0 for index in range(len(periods))) and (
+            max(values) - min(values) <= 10
+        )
+        if is_disorder:
+            result_by_homepage[str(homepage)] = {"高频发帖时段": "", "高频发帖类型": disorder_type}
+            continue
+        top_index = max(range(len(periods)), key=lambda index: (counts[index], -index))
+        top_period = periods[top_index]
+        result_by_homepage[str(homepage)] = {
+            "高频发帖时段": str(top_period["range"]),
+            "高频发帖类型": str(top_period["type"]),
+        }
+
+    if progress is not None:
+        progress(86, "正在写回账号表高频发帖时段和类型列……")
+    output_df = account_df.copy()
+    for column in POSTING_PERIOD_OUTPUT_COLUMNS:
+        if column in output_df.columns:
+            output_df = output_df.drop(columns=[column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for column in POSTING_PERIOD_OUTPUT_COLUMNS:
+        output_df[column] = account_keys.map(lambda key, column=column: result_by_homepage.get(key, {}).get(column, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(94, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    typed_accounts = int(output_df["高频发帖类型"].map(_is_non_empty_cell).sum())
+    disorder_accounts = int((output_df["高频发帖类型"] == disorder_type).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "dictionary_rows": len(dictionary_df),
+        "periods": len(periods),
+        "valid_time_posts": len(work),
+        "matched_posts": len(matched_work),
+        "typed_accounts": typed_accounts,
+        "disorder_accounts": disorder_accounts,
+    }
 
 def classify_post_type(row: Any) -> str:
     homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
