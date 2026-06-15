@@ -49,21 +49,21 @@ def deduplicate_posts_excel(
     df = read_excel_with_passwords(input_path, passwords, sheet_name)
     if progress is not None:
         progress(35, "已读取 Excel，正在检查必要列……")
-    missing = [col for col in ["贴文url", "点赞数", "分享数", "评论数"] if col not in df.columns]
+    missing = [col for col in ["帖url", "点赞数", "分享数", "评论数"] if col not in df.columns]
     if missing:
         raise ValueError(f"Excel 缺少必要列：{', '.join(missing)}")
 
     work = df.copy()
     if progress is not None:
-        progress(55, "正在计算重复贴文保留规则……")
+        progress(55, "正在计算重复帖保留规则……")
     score_cols = ["点赞数", "分享数", "评论数"]
     numeric_scores = work[score_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
     work["__dedup_score__"] = numeric_scores.sum(axis=1)
     work["__dedup_random__"] = [random.random() for _ in range(len(work))]
     work["__dedup_order__"] = range(len(work))
     kept = (
-        work.sort_values(["贴文url", "__dedup_score__", "__dedup_random__"], ascending=[True, False, False])
-        .drop_duplicates(subset=["贴文url"], keep="first")
+        work.sort_values(["帖url", "__dedup_score__", "__dedup_random__"], ascending=[True, False, False])
+        .drop_duplicates(subset=["帖url"], keep="first")
         .sort_values("__dedup_order__")
         .drop(columns=["__dedup_score__", "__dedup_random__", "__dedup_order__"])
     )
@@ -123,7 +123,7 @@ def calculate_posting_period_type_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -131,7 +131,7 @@ def calculate_posting_period_type_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取发帖时段字典 Excel……")
@@ -139,9 +139,9 @@ def calculate_posting_period_type_excel(
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖发布时间"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
     missing_dictionary = [col for col in ["时段类型", "起始时段", "结束时段"] if col not in dictionary_df.columns]
     if missing_dictionary:
         raise ValueError(f"字典 Excel 缺少必要列：{', '.join(missing_dictionary)}")
@@ -166,10 +166,10 @@ def calculate_posting_period_type_excel(
         raise ValueError("字典 Excel 中没有可用的时段定义。")
 
     if progress is not None:
-        progress(58, "正在按贴文发布时间匹配发帖时段……")
+        progress(58, "正在按帖发布时间匹配发帖时段……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
-    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce", format="mixed")
+    work["__post_datetime__"] = pd.to_datetime(work["帖发布时间"], errors="coerce", format="mixed")
     work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
     work["__seconds__"] = (
         work["__post_datetime__"].dt.hour * 3600
@@ -240,14 +240,14 @@ def calculate_posting_period_type_excel(
 
 def classify_post_type(row: Any) -> str:
     homepage_url = "" if not _is_non_empty_cell(row.get("主页url")) else str(row.get("主页url"))
-    post_url = "" if not _is_non_empty_cell(row.get("贴文url")) else str(row.get("贴文url"))
+    post_url = "" if not _is_non_empty_cell(row.get("帖url")) else str(row.get("帖url"))
     if "/videos/" in homepage_url.lower() or "/videos/" in post_url.lower():
         return "视频"
     attachments = "" if not _is_non_empty_cell(row.get("图片附件")) else str(row.get("图片附件"))
     if attachments.count("origin_url_md5") >= 2:
         return "图片"
     if str(row.get("创作类型", "")).strip().lower() == "common":
-        if _is_non_empty_cell(row.get("标题")) or _is_non_empty_cell(row.get("帖子正文")):
+        if _is_non_empty_cell(row.get("标题")) or _is_non_empty_cell(row.get("帖正文")):
             return "文字"
     return ""
 
@@ -273,23 +273,23 @@ def calculate_post_type_ratios_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     if progress is not None:
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
-    missing_posts = [col for col in ["主页url", "图片附件", "创作类型", "标题", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "图片附件", "创作类型", "标题", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(50, "正在识别每条贴文的文字、图片、视频类型……")
+        progress(50, "正在识别每条帖的文字、图片、视频类型……")
     work = post_df.copy()
     work["__post_type__"] = work.apply(classify_post_type, axis=1)
     typed_work = work[work["__post_type__"].isin(["文字", "图片", "视频"])].copy()
@@ -347,27 +347,27 @@ def calculate_average_post_length_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     if progress is not None:
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
-    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在计算每条贴文正文长度……")
+        progress(55, "正在计算每条帖正文长度……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     work = work[work["__homepage_key__"] != ""].copy()
-    work["__body_length__"] = work["帖子正文"].map(_post_body_text_length)
+    work["__body_length__"] = work["帖正文"].map(_post_body_text_length)
 
     if progress is not None:
         progress(72, "正在按账号汇总平均发帖长度……")
@@ -411,7 +411,7 @@ def calculate_average_original_post_interactions_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     import pandas as pd
 
@@ -419,7 +419,7 @@ def calculate_average_original_post_interactions_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
@@ -427,7 +427,7 @@ def calculate_average_original_post_interactions_excel(
     required_post_columns = ["主页url", "创作类型", "点赞数", "分享数", "评论数"]
     missing_posts = [col for col in required_post_columns if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
         progress(55, "正在筛选原创帖并计算每帖互动数……")
@@ -486,7 +486,7 @@ def calculate_average_daily_original_posts_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     import pandas as pd
 
@@ -494,24 +494,24 @@ def calculate_average_daily_original_posts_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    required_post_columns = ["主页url", "创作类型", "贴文发布时间"]
+    required_post_columns = ["主页url", "创作类型", "帖发布时间"]
     missing_posts = [col for col in required_post_columns if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在解析贴文发布时间并筛选原创贴文……")
+        progress(55, "正在解析帖发布时间并筛选原创帖……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     work["__creation_type__"] = work["创作类型"].map(
         lambda value: str(value).strip().lower() if _is_non_empty_cell(value) else ""
     )
-    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce", format="mixed")
+    work["__post_datetime__"] = pd.to_datetime(work["帖发布时间"], errors="coerce", format="mixed")
     work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
     work["__post_date__"] = work["__post_datetime__"].dt.date
     work["__is_original__"] = work["__creation_type__"] != "share"
@@ -571,7 +571,7 @@ def calculate_weekly_post_frequency_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     import pandas as pd
 
@@ -579,25 +579,25 @@ def calculate_weekly_post_frequency_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    required_post_columns = ["主页url", "贴文发布时间"]
+    required_post_columns = ["主页url", "帖发布时间"]
     missing_posts = [col for col in required_post_columns if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在解析贴文发布时间并统计账号发帖频率……")
+        progress(55, "正在解析帖发布时间并统计账号发帖频率……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
-    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce", format="mixed")
+    work["__post_datetime__"] = pd.to_datetime(work["帖发布时间"], errors="coerce", format="mixed")
     work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
 
     if progress is not None:
-        progress(74, "正在按账号计算每周发布帖子频率……")
+        progress(74, "正在按账号计算每周发布帖频率……")
     span_weeks_by_homepage: dict[str, int] = {}
     frequency_by_homepage: dict[str, float] = {}
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
@@ -616,9 +616,9 @@ def calculate_weekly_post_frequency_excel(
         frequency_by_homepage[str(homepage)] = round(len(homepage_rows) / span_weeks, 2)
 
     if progress is not None:
-        progress(84, "正在写回账号表跨越周数和每周发布帖子频率列……")
+        progress(84, "正在写回账号表跨越周数和每周发布帖频率列……")
     span_weeks_column = "跨越周数"
-    output_column = "每周发布帖子频率（次）"
+    output_column = "每周发布帖频率（次）"
     output_df = account_df.copy()
     existing_output_columns = [col for col in [span_weeks_column, output_column] if col in output_df.columns]
     if existing_output_columns:
@@ -655,7 +655,7 @@ def calculate_daily_active_span_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     import pandas as pd
 
@@ -663,20 +663,20 @@ def calculate_daily_active_span_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖发布时间"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在解析贴文发布时间并筛选单日 2 条及以上的发帖日期……")
+        progress(55, "正在解析帖发布时间并筛选单日 2 条及以上的发帖日期……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
-    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce")
+    work["__post_datetime__"] = pd.to_datetime(work["帖发布时间"], errors="coerce")
     work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
     work["__post_date__"] = work["__post_datetime__"].dt.date
 
@@ -732,7 +732,7 @@ def calculate_active_day_ratio_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     import pandas as pd
 
@@ -740,23 +740,23 @@ def calculate_active_day_ratio_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "贴文发布时间"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖发布时间"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在统计帖子数量并解析贴文发布时间……")
+        progress(55, "正在统计帖数量并解析帖发布时间……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     post_counts_by_homepage = (
         work[work["__homepage_key__"] != ""].groupby("__homepage_key__", sort=False).size().to_dict()
     )
-    work["__post_datetime__"] = pd.to_datetime(work["贴文发布时间"], errors="coerce")
+    work["__post_datetime__"] = pd.to_datetime(work["帖发布时间"], errors="coerce")
     work = work[(work["__homepage_key__"] != "") & work["__post_datetime__"].notna()].copy()
     work["__post_date__"] = work["__post_datetime__"].dt.date
 
@@ -776,11 +776,11 @@ def calculate_active_day_ratio_excel(
         ratios_by_homepage[homepage_key] = _format_single_percentage(active_days, span_days)
 
     if progress is not None:
-        progress(84, "正在写回账号表帖子数量、帖子时间跨度天数、活跃天数和活跃天数占比列……")
+        progress(84, "正在写回账号表帖数量、帖时间跨度天数、活跃天数和活跃天数占比列……")
     output_df = account_df.copy()
     account_keys = output_df["FB主页"].map(_normalized_key)
-    output_df["帖子数量"] = account_keys.map(lambda key: int(post_counts_by_homepage.get(key, 0)))
-    output_df["帖子时间跨度天数"] = account_keys.map(lambda key: span_days_by_homepage.get(key, ""))
+    output_df["帖数量"] = account_keys.map(lambda key: int(post_counts_by_homepage.get(key, 0)))
+    output_df["帖时间跨度天数"] = account_keys.map(lambda key: span_days_by_homepage.get(key, ""))
     output_df["活跃天数"] = account_keys.map(lambda key: active_days_by_homepage.get(key, ""))
     output_df["活跃天数占比"] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
 
@@ -790,8 +790,8 @@ def calculate_active_day_ratio_excel(
     output_df.to_excel(output_path, index=False)
 
     matched_accounts = int(account_keys.isin(set(post_counts_by_homepage)).sum())
-    post_count_accounts = int((output_df["帖子数量"] > 0).sum())
-    active_span_accounts = int(output_df["帖子时间跨度天数"].map(_is_non_empty_cell).sum())
+    post_count_accounts = int((output_df["帖数量"] > 0).sum())
+    active_span_accounts = int(output_df["帖时间跨度天数"].map(_is_non_empty_cell).sum())
     active_days_accounts = int(output_df["活跃天数"].map(_is_non_empty_cell).sum())
     active_ratio_accounts = int(output_df["活跃天数占比"].map(_is_non_empty_cell).sum())
     return {
@@ -828,23 +828,23 @@ def calculate_added_opinion_share_rate_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     if progress is not None:
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
-    missing_posts = [col for col in ["主页url", "创作类型", "标题", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "创作类型", "标题", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     if progress is not None:
-        progress(55, "正在识别转发贴是否附加标题或帖子正文……")
+        progress(55, "正在识别转发贴是否附加标题或帖正文……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     work["__creation_type__"] = work["创作类型"].map(
@@ -853,7 +853,7 @@ def calculate_added_opinion_share_rate_excel(
     share_work = work[(work["__creation_type__"] == "share") & (work["__homepage_key__"] != "")].copy()
     share_work["__has_added_opinion__"] = share_work.apply(
         lambda row: _is_non_empty_cell(row.get("标题"))
-        or _is_non_empty_cell(row.get("帖子正文")),
+        or _is_non_empty_cell(row.get("帖正文")),
         axis=1,
     )
 
@@ -901,7 +901,7 @@ def calculate_source_media_camp_ratios_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -909,7 +909,7 @@ def calculate_source_media_camp_ratios_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取账号名字典 Excel……")
@@ -919,7 +919,7 @@ def calculate_source_media_camp_ratios_excel(
         raise ValueError(f"账号 Excel 缺少必要列：{"FB主页"}")
     missing_posts = [col for col in ["主页url", "创作类型", "分享贴账号名"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
     missing_dictionary = [col for col in ["分享贴账号名", "账号立场归属", "账号类型归属"] if col not in dictionary_df.columns]
     if missing_dictionary:
         raise ValueError(f"字典 Excel 缺少必要列：{', '.join(missing_dictionary)}")
@@ -1029,7 +1029,7 @@ def calculate_post_theme_ratios_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -1037,7 +1037,7 @@ def calculate_post_theme_ratios_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取内容偏好字典 Excel……")
@@ -1045,18 +1045,18 @@ def calculate_post_theme_ratios_excel(
 
     if "FB主页" not in account_df.columns:
         raise ValueError('账号 Excel 缺少必要列：FB主页')
-    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
-    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖子正文":
-        raise ValueError("字典 Excel 第一列必须是：帖子正文")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖正文":
+        raise ValueError("字典 Excel 第一列必须是：帖正文")
     if "内容偏好" not in dictionary_df.columns:
         raise ValueError("字典 Excel 缺少必要列：内容偏好")
 
     if progress is not None:
-        progress(55, "正在按帖子正文匹配内容偏好分类……")
+        progress(55, "正在按帖正文匹配内容偏好分组……")
     dictionary_work = dictionary_df.copy()
-    dictionary_work["__body_key__"] = dictionary_work["帖子正文"].map(_normalized_key)
+    dictionary_work["__body_key__"] = dictionary_work["帖正文"].map(_normalized_key)
     dictionary_work["__theme__"] = dictionary_work["内容偏好"].map(_normalized_key)
     dictionary_work = dictionary_work[
         (dictionary_work["__body_key__"] != "") & (dictionary_work["__theme__"] != "")
@@ -1067,14 +1067,14 @@ def calculate_post_theme_ratios_excel(
 
     post_work = post_df.copy()
     post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
-    post_work["__body_key__"] = post_work["帖子正文"].map(_normalized_key)
+    post_work["__body_key__"] = post_work["帖正文"].map(_normalized_key)
     post_work["__theme__"] = post_work["__body_key__"].map(theme_by_body)
     matched_work = post_work[
         (post_work["__homepage_key__"] != "") & post_work["__theme__"].map(_is_non_empty_cell)
     ].copy()
 
     if progress is not None:
-        progress(72, "正在按账号汇总帖子主题占比……")
+        progress(72, "正在按账号汇总帖主题占比……")
     ratios_by_homepage: dict[str, dict[str, str]] = {}
     for homepage, homepage_rows in matched_work.groupby("__homepage_key__", sort=False):
         counts = {str(name): int(count) for name, count in homepage_rows["__theme__"].value_counts(sort=False).items()}
@@ -1085,7 +1085,7 @@ def calculate_post_theme_ratios_excel(
         }
 
     if progress is not None:
-        progress(84, "正在写回账号表帖子主题占比列……")
+        progress(84, "正在写回账号表帖主题占比列……")
     output_df = account_df.copy()
     existing_theme_columns = [column for column in output_df.columns if str(column).startswith("主题占比-")]
     if existing_theme_columns:
@@ -1125,7 +1125,7 @@ def calculate_sentiment_expression_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -1133,7 +1133,7 @@ def calculate_sentiment_expression_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取情感表达字典 Excel……")
@@ -1141,18 +1141,18 @@ def calculate_sentiment_expression_excel(
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
-    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖子正文":
-        raise ValueError("字典 Excel 第一列必须是：帖子正文")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖正文":
+        raise ValueError("字典 Excel 第一列必须是：帖正文")
     if "情感表达倾向" not in dictionary_df.columns:
         raise ValueError("字典 Excel 缺少必要列：情感表达倾向")
 
     if progress is not None:
-        progress(55, "正在按帖子正文匹配情感表达倾向……")
+        progress(55, "正在按帖正文匹配情感表达倾向……")
     dictionary_work = dictionary_df.copy()
-    dictionary_work["__body_key__"] = dictionary_work["帖子正文"].map(_normalized_key)
+    dictionary_work["__body_key__"] = dictionary_work["帖正文"].map(_normalized_key)
     dictionary_work["__sentiment__"] = dictionary_work["情感表达倾向"].map(_normalized_key)
     dictionary_work = dictionary_work[
         (dictionary_work["__body_key__"] != "") & dictionary_work["__sentiment__"].isin(SENTIMENT_VALUES)
@@ -1161,7 +1161,7 @@ def calculate_sentiment_expression_excel(
 
     post_work = post_df.copy()
     post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
-    post_work["__body_key__"] = post_work["帖子正文"].map(_normalized_key)
+    post_work["__body_key__"] = post_work["帖正文"].map(_normalized_key)
     post_work["__sentiment__"] = post_work["__body_key__"].map(sentiment_by_body)
     matched_work = post_work[
         (post_work["__homepage_key__"] != "") & post_work["__sentiment__"].map(_is_non_empty_cell)
@@ -1220,7 +1220,7 @@ def calculate_stance_tendency_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -1228,7 +1228,7 @@ def calculate_stance_tendency_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取立场倾向字典 Excel……")
@@ -1236,18 +1236,18 @@ def calculate_stance_tendency_excel(
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
-    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖子正文":
-        raise ValueError("字典 Excel 第一列必须是：帖子正文")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if len(dictionary_df.columns) < 1 or str(dictionary_df.columns[0]).strip() != "帖正文":
+        raise ValueError("字典 Excel 第一列必须是：帖正文")
     if "两岸议题立场倾向" not in dictionary_df.columns:
         raise ValueError("字典 Excel 缺少必要列：两岸议题立场倾向")
 
     if progress is not None:
-        progress(55, "正在按帖子正文匹配两岸议题立场倾向……")
+        progress(55, "正在按帖正文匹配两岸议题立场倾向……")
     dictionary_work = dictionary_df.copy()
-    dictionary_work["__body_key__"] = dictionary_work["帖子正文"].map(_normalized_key)
+    dictionary_work["__body_key__"] = dictionary_work["帖正文"].map(_normalized_key)
     dictionary_work["__stance__"] = dictionary_work["两岸议题立场倾向"].map(_normalized_key)
     dictionary_work = dictionary_work[
         (dictionary_work["__body_key__"] != "") & dictionary_work["__stance__"].isin(STANCE_VALUES)
@@ -1256,7 +1256,7 @@ def calculate_stance_tendency_excel(
 
     post_work = post_df.copy()
     post_work["__homepage_key__"] = post_work["主页url"].map(_normalized_key)
-    post_work["__body_key__"] = post_work["帖子正文"].map(_normalized_key)
+    post_work["__body_key__"] = post_work["帖正文"].map(_normalized_key)
     post_work["__stance__"] = post_work["__body_key__"].map(stance_by_body)
     matched_work = post_work[
         (post_work["__homepage_key__"] != "") & post_work["__stance__"].map(_is_non_empty_cell)
@@ -1363,7 +1363,7 @@ def _load_first_column_keywords(dictionary_df: Any) -> list[str]:
 
 def _combine_post_text(row: Any) -> str:
     parts = []
-    for column in ("标题", "帖子正文"):
+    for column in ("标题", "帖正文"):
         if column in row and _is_non_empty_cell(row.get(column)):
             parts.append(str(row.get(column)))
     return "\n".join(parts)
@@ -1383,7 +1383,7 @@ def calculate_custom_keyword_frequencies_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
 
     normalized_keywords = list(dict.fromkeys(_normalized_key(keyword) for keyword in keywords))
     normalized_keywords = [keyword for keyword in normalized_keywords if keyword]
@@ -1404,19 +1404,19 @@ def calculate_custom_keyword_frequencies_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(30, "正在后台读取贴文 Excel……")
+        progress(30, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
     missing_posts = [col for col in ["主页url"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
-    if "标题" not in post_df.columns and "帖子正文" not in post_df.columns:
-        raise ValueError("贴文 Excel 至少需要包含“标题”或“帖子正文”列。")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if "标题" not in post_df.columns and "帖正文" not in post_df.columns:
+        raise ValueError("帖 Excel 至少需要包含“标题”或“帖正文”列。")
 
     if progress is not None:
-        progress(55, f"正在扫描贴文并统计 {len(normalized_keywords)} 个自定义关键词……")
+        progress(55, f"正在扫描帖并统计 {len(normalized_keywords)} 个自定义关键词……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     work = work[work["__homepage_key__"] != ""].copy()
@@ -1473,7 +1473,7 @@ def calculate_sensitive_topic_participation_rate_excel(
     if not account_input_path.exists():
         raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
     if not post_input_path.exists():
-        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+        raise FileNotFoundError(f"帖文件不存在：{post_input_path}")
     if not dictionary_input_path.exists():
         raise FileNotFoundError(f"字典文件不存在：{dictionary_input_path}")
 
@@ -1481,7 +1481,7 @@ def calculate_sensitive_topic_participation_rate_excel(
         progress(10, "正在后台读取账号 Excel……")
     account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
     if progress is not None:
-        progress(25, "正在后台读取贴文 Excel……")
+        progress(25, "正在后台读取帖 Excel……")
     post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
     if progress is not None:
         progress(40, "正在后台读取敏感话题关键词字典 Excel……")
@@ -1489,9 +1489,9 @@ def calculate_sensitive_topic_participation_rate_excel(
 
     if "FB主页" not in account_df.columns:
         raise ValueError("账号 Excel 缺少必要列：FB主页")
-    missing_posts = [col for col in ["主页url", "帖子正文"] if col not in post_df.columns]
+    missing_posts = [col for col in ["主页url", "帖正文"] if col not in post_df.columns]
     if missing_posts:
-        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+        raise ValueError(f"帖 Excel 缺少必要列：{', '.join(missing_posts)}")
 
     keywords = _load_first_column_keywords(dictionary_df)
     if not keywords:
@@ -1502,7 +1502,7 @@ def calculate_sensitive_topic_participation_rate_excel(
     matcher = _KeywordMatcher(keywords)
 
     if progress is not None:
-        progress(65, "正在扫描贴文标题和正文中的敏感话题关键词……")
+        progress(65, "正在扫描帖标题和正文中的敏感话题关键词……")
     work = post_df.copy()
     work["__homepage_key__"] = work["主页url"].map(_normalized_key)
     work = work[work["__homepage_key__"] != ""].copy()

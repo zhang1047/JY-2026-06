@@ -166,8 +166,8 @@ class ToolListDialog(tk.Toplevel):
         title_group = ttk.Frame(header, style="Surface.TFrame")
         title_group.pack(side="left", fill="x", expand=True)
         ttk.Label(title_group, text="工具列表", style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(title_group, text="按分类管理工具，拖动工具可移动分类", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
-        make_rounded_button(header, "＋ 新增分类", app.add_category, role="primary", width=96).pack(side="right")
+        ttk.Label(title_group, text="按分组管理工具，拖动工具可移动分组", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
+        make_rounded_button(header, "＋ 新增分组", app.add_category, role="primary", width=96).pack(side="right")
 
         list_card = ttk.Frame(shell, style="Card.TFrame", padding=(12, 12))
         list_card.pack(fill="both", expand=True)
