@@ -15,6 +15,7 @@ from jy_toolbox.ui.tools import (
     AverageDailyOriginalPostsTool,
     AverageOriginalPostInteractionsTool,
     AveragePostLengthTool,
+    CustomKeywordFrequencyTool,
     DailyActiveSpanTool,
     PostDedupTool,
     PostingPeriodTypeTool,
@@ -125,6 +126,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: SensitiveTopicParticipationRateTool(
                     parent, app, state, app.get_tool_description("sensitive_topic_participation_rate")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="custom_keyword_frequency",
+                name="自定义关键词统计",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和贴文 Excel，通过账号表“FB主页”与贴文表“主页url”关联；"
+                    "在工具界面新增多个关键词后，按每个关键词统计每个账号所有贴文标题和正文中的出现次数，"
+                    "并在账号表最后新增“词频-关键词”列。关键词列表支持增删，并可一键转换为繁体或简体。"
+                ),
+                factory=lambda parent, app, state: CustomKeywordFrequencyTool(
+                    parent, app, state, app.get_tool_description("custom_keyword_frequency")
                 ),
             )
         )

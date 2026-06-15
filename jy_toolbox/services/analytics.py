@@ -31,6 +31,7 @@ STANCE_OUTPUT_COLUMNS = (
 )
 
 POSTING_PERIOD_OUTPUT_COLUMNS = ("高频发帖时段", "高频发帖类型")
+CUSTOM_KEYWORD_FREQUENCY_PREFIX = "词频-"
 
 
 def deduplicate_posts_excel(
@@ -1365,6 +1366,85 @@ def _combine_post_text(row: Any) -> str:
         if column in row and _is_non_empty_cell(row.get(column)):
             parts.append(str(row.get(column)))
     return "\n".join(parts)
+
+
+def calculate_custom_keyword_frequencies_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    keywords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"贴文文件不存在：{post_input_path}")
+
+    normalized_keywords = list(dict.fromkeys(_normalized_key(keyword) for keyword in keywords))
+    normalized_keywords = [keyword for keyword in normalized_keywords if keyword]
+    if not normalized_keywords:
+        raise ValueError("请至少新增 1 个可用关键词。")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取贴文 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    missing_posts = [col for col in ["主页url"] if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"贴文 Excel 缺少必要列：{', '.join(missing_posts)}")
+    if "标题" not in post_df.columns and "帖子正文" not in post_df.columns:
+        raise ValueError("贴文 Excel 至少需要包含“标题”或“帖子正文”列。")
+
+    if progress is not None:
+        progress(55, f"正在扫描贴文并统计 {len(normalized_keywords)} 个自定义关键词……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work = work[work["__homepage_key__"] != ""].copy()
+    work["__post_text__"] = work.apply(_combine_post_text, axis=1)
+
+    counts_by_homepage: dict[str, dict[str, int]] = {}
+    for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
+        joined_text = "\n".join(str(value) for value in homepage_rows["__post_text__"] if _is_non_empty_cell(value))
+        counts_by_homepage[str(homepage)] = {
+            keyword: int(joined_text.count(keyword))
+            for keyword in normalized_keywords
+        }
+
+    if progress is not None:
+        progress(82, "正在写回账号表自定义关键词词频列……")
+    output_df = account_df.copy()
+    output_columns = [f"{CUSTOM_KEYWORD_FREQUENCY_PREFIX}{keyword}" for keyword in normalized_keywords]
+    for column in output_columns:
+        if column in output_df.columns:
+            output_df = output_df.drop(columns=[column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    for keyword, column in zip(normalized_keywords, output_columns, strict=True):
+        output_df[column] = account_keys.map(lambda key, keyword=keyword: counts_by_homepage.get(key, {}).get(keyword, 0))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(94, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(
+        output_df[output_columns].apply(lambda row: any(int(value) > 0 for value in row), axis=1).sum()
+    )
+    total_occurrences = int(output_df[output_columns].sum(numeric_only=True).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "keywords": len(normalized_keywords),
+        "matched_accounts": matched_accounts,
+        "total_occurrences": total_occurrences,
+    }
 
 
 def calculate_sensitive_topic_participation_rate_excel(
