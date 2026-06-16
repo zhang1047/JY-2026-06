@@ -796,7 +796,9 @@ class GroupRunFrame(BaseToolFrame):
             action_frame = ttk.Frame(parent, style="Card.TFrame")
             action_frame.grid(row=row, column=2, sticky="w", padx=10, pady=8)
             make_rounded_button(action_frame, "浏览", command, width=54).pack(side="left")
-            tk.Label(action_frame, textvariable=self.dictionary_loading_var, foregroundvariable=self.dictionary_loading_color, background=COLOR_SURFACE).pack(side="left", padx=(6, 0))
+            loading_label = tk.Label(action_frame, textvariable=self.dictionary_loading_var, foreground=self.dictionary_loading_color.get(), background=COLOR_SURFACE)
+            self._bind_label_foreground(loading_label, self.dictionary_loading_color)
+            loading_label.pack(side="left", padx=(6, 0))
         elif label.startswith("最终输出 Excel"):
             ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         elif command is not None:
@@ -817,6 +819,15 @@ class GroupRunFrame(BaseToolFrame):
 
     def _tool_has_extra_group_settings(self, key: str) -> bool:
         return key == "custom_keyword_frequency"
+
+
+    @staticmethod
+    def _bind_label_foreground(label: tk.Label, color_var: tk.StringVar) -> None:
+        """Keep a Tk label foreground synchronized with a StringVar color."""
+        def update_color(*_args: object) -> None:
+            label.configure(foreground=color_var.get())
+
+        color_var.trace_add("write", update_color)
 
     def _add_custom_keyword_setting_row(self, parent: tk.Widget, key: str) -> None:
         state = self.app.config.get_tool_state(key)
@@ -954,7 +965,9 @@ class GroupRunFrame(BaseToolFrame):
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "一键执行", self.run_batch, role="primary", width=82).pack(side="left")
         ttk.Progressbar(actions, variable=self.progress_var, maximum=max(1, len(self.tool_keys)), length=260).pack(side="left", padx=12)
-        tk.Label(actions, textvariable=self.progress_text_var, foregroundvariable=self.progress_text_color, background=COLOR_BG).pack(side="left")
+        progress_label = tk.Label(actions, textvariable=self.progress_text_var, foreground=self.progress_text_color.get(), background=COLOR_BG)
+        self._bind_label_foreground(progress_label, self.progress_text_color)
+        progress_label.pack(side="left")
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
