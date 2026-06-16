@@ -150,7 +150,7 @@ class BaseToolFrame(ttk.Frame):
         combo["values"] = ()
         var.set(var.get().strip())
         if loading_var is not None:
-            loading_var.set("识别sheet名中...")
+            loading_var.set("正在识别sheet页")
         if hasattr(self, "status_var"):
             if not self._sheet_loading_pending:
                 self._sheet_status_before_loading = self.status_var.get()
@@ -229,7 +229,7 @@ class BaseToolFrame(ttk.Frame):
             return
         self._sheet_loading_pending.pop(combo_key, None)
         if loading_var is not None:
-            loading_var.set("")
+            loading_var.set(f"识别到{len(sheet_names)}个sheet页")
         if not self._widget_exists(combo):
             self._update_sheet_loading_status()
             return
