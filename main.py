@@ -41,7 +41,15 @@ def _install_known_stderr_filter() -> None:
         name="stderr-filter",
         daemon=True,
     ).start()
-    sys.stderr = os.fdopen(os.dup(2), "w", encoding=sys.stderr.encoding or "utf-8", errors="replace", buffering=1)
+
+    stderr_encoding = getattr(sys.stderr, "encoding", None) or "utf-8"
+    sys.stderr = os.fdopen(
+        os.dup(2),
+        "w",
+        encoding=stderr_encoding,
+        errors="replace",
+        buffering=1,
+    )
 
 
 def main() -> None:
