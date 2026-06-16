@@ -133,12 +133,8 @@ class DescriptionEditDialog(tk.Toplevel):
         self.bind("<Control-s>", lambda _e: self.save())
 
     def restore_default(self) -> None:
-        tool_key = self.tool_frame.app.current_tool_key
-        if not tool_key:
-            return
-        default_description = self.tool_frame.app.tools[tool_key].description
         self.text.delete("1.0", "end")
-        self.text.insert("1.0", default_description)
+        self.text.insert("1.0", self.tool_frame.default_description())
 
     def save(self) -> None:
         self.tool_frame.update_description(self.text.get("1.0", "end-1c").strip())

@@ -18,6 +18,7 @@ class ConfigStore:
             "tool_orders": {},
             "tool_states": {},
             "tool_descriptions": {},
+            "group_run_descriptions": {},
         }
         self.load()
 

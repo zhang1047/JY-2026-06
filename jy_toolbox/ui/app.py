@@ -759,7 +759,11 @@ class GroupRunFrame(BaseToolFrame):
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", category: str, tool_keys: list[str]) -> None:
         self.category = category
         self.tool_keys = tool_keys
-        super().__init__(parent, app, {}, f"一键执行“{category}”分组中的 {len(tool_keys)} 个工具。账号表、帖子表、字典表共用；每个工具可单独选择字典 sheet，并沿用该工具已保存的其他设置。")
+        default_description = self._default_group_run_description(category, len(tool_keys))
+        group_run_descriptions = app.config.data.setdefault("group_run_descriptions", {})
+        custom_description = group_run_descriptions.get(category)
+        description = custom_description.strip() if isinstance(custom_description, str) and custom_description.strip() else default_description
+        super().__init__(parent, app, {}, description)
         self.account_input_var = tk.StringVar(value="")
         self.post_input_var = tk.StringVar(value="")
         self.dictionary_input_var = tk.StringVar(value="")
@@ -784,6 +788,17 @@ class GroupRunFrame(BaseToolFrame):
         self._temp_dir: str | None = None
         self._original_showinfo: Callable[..., object] | None = None
         self._build_form()
+
+    @staticmethod
+    def _default_group_run_description(category: str, tool_count: int) -> str:
+        return f"一键执行“{category}”分组中的 {tool_count} 个工具。账号表、帖子表、字典表共用；每个工具可单独选择字典 sheet，并沿用该工具已保存的其他设置。"
+
+    def description_storage(self) -> tuple[dict[str, Any], str, str] | None:
+        return (
+            self.app.config.data.setdefault("group_run_descriptions", {}),
+            self.category,
+            self._default_group_run_description(self.category, len(self.tool_keys)),
+        )
 
     def save_state(self) -> None:
         return
