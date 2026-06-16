@@ -768,6 +768,7 @@ class GroupRunFrame(BaseToolFrame):
         self.post_sheet_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="请选择共用表格后开始一键执行。")
         self.progress_text_var = tk.StringVar(value=f"0/{len(tool_keys)}")
+        self.progress_text_color = tk.StringVar(value=COLOR_MUTED)
         self.progress_var = tk.DoubleVar(value=0)
         self.dictionary_sheet_vars: dict[str, tk.StringVar] = {}
         self.dictionary_sheet_combos: dict[str, ttk.Combobox] = {}
@@ -775,6 +776,7 @@ class GroupRunFrame(BaseToolFrame):
         self.custom_keyword_input_vars: dict[str, tk.StringVar] = {}
         self.custom_ignore_script_vars: dict[str, tk.BooleanVar] = {}
         self.dictionary_loading_var = tk.StringVar(value="")
+        self.dictionary_loading_color = tk.StringVar(value=COLOR_INFO_BLUE)
         self._batch_frames: list[BaseToolFrame] = []
         self._batch_index = 0
         self._batch_failed = False
@@ -794,7 +796,7 @@ class GroupRunFrame(BaseToolFrame):
             action_frame = ttk.Frame(parent, style="Card.TFrame")
             action_frame.grid(row=row, column=2, sticky="w", padx=10, pady=8)
             make_rounded_button(action_frame, "浏览", command, width=54).pack(side="left")
-            ttk.Label(action_frame, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).pack(side="left", padx=(6, 0))
+            tk.Label(action_frame, textvariable=self.dictionary_loading_var, foregroundvariable=self.dictionary_loading_color, background=COLOR_SURFACE).pack(side="left", padx=(6, 0))
         elif label.startswith("最终输出 Excel"):
             ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         elif command is not None:
@@ -952,7 +954,7 @@ class GroupRunFrame(BaseToolFrame):
         actions.pack(fill="x", padx=22, pady=12)
         make_rounded_button(actions, "一键执行", self.run_batch, role="primary", width=82).pack(side="left")
         ttk.Progressbar(actions, variable=self.progress_var, maximum=max(1, len(self.tool_keys)), length=260).pack(side="left", padx=12)
-        ttk.Label(actions, textvariable=self.progress_text_var, style="Muted.TLabel").pack(side="left")
+        tk.Label(actions, textvariable=self.progress_text_var, foregroundvariable=self.progress_text_color, background=COLOR_BG).pack(side="left")
         status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
         status_card.pack(fill="x", padx=22, pady=8)
         ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
@@ -988,7 +990,8 @@ class GroupRunFrame(BaseToolFrame):
         path = filedialog.askopenfilename(title="选择字典 Excel 文件", filetypes=[("Excel 文件", "*.xlsx *.xls *.xlsm"), ("所有文件", "*.*")])
         if path:
             self.dictionary_input_var.set(path)
-            self.dictionary_loading_var.set("识别sheet名中...")
+            self.dictionary_loading_color.set(COLOR_INFO_BLUE)
+            self.dictionary_loading_var.set("正在识别sheet页")
             for widget in self._dictionary_combos():
                 self.populate_sheets_async(path, widget[1], widget[0], show_errors=True)
             self._wait_dictionary_sheet_loading()
@@ -998,7 +1001,15 @@ class GroupRunFrame(BaseToolFrame):
         if pending_combo_keys & set(self._sheet_loading_pending):
             self.after(120, self._wait_dictionary_sheet_loading)
             return
-        self.dictionary_loading_var.set("")
+        sheet_count = 0
+        combos = self._dictionary_combos()
+        if combos:
+            try:
+                sheet_count = len(combos[0][1]["values"])
+            except tk.TclError:
+                sheet_count = 0
+        self.dictionary_loading_color.set(COLOR_PRIMARY)
+        self.dictionary_loading_var.set(f"识别到{sheet_count}个sheet页")
 
     def _dictionary_combos(self) -> list[tuple[tk.StringVar, ttk.Combobox]]:
         return [(self.dictionary_sheet_vars[key], combo) for key, combo in self.dictionary_sheet_combos.items()]
@@ -1024,13 +1035,16 @@ class GroupRunFrame(BaseToolFrame):
             self._original_showinfo = messagebox.showinfo
             messagebox.showinfo = lambda *args, **kwargs: None
         self.progress_var.set(0)
-        self.progress_text_var.set(f"0/{len(self.tool_keys)}")
+        self.progress_text_color.set(COLOR_INFO_BLUE)
+        self.progress_text_var.set(f"正在处理:0/{len(self.tool_keys)}")
         self.status_var.set("正在准备一键执行……")
         self._run_next_tool()
 
     def _run_next_tool(self) -> None:
         if self._batch_index >= len(self.tool_keys):
             self.status_var.set("一键执行完成。")
+            self.progress_text_color.set(COLOR_PRIMARY)
+            self.progress_text_var.set(f"处理完成:{len(self.tool_keys)}/{len(self.tool_keys)}")
             self._restore_showinfo()
             self._cleanup_temp_dir()
             BatchCompleteDialog(self, Path(self.output_var.get().strip()))
@@ -1097,7 +1111,8 @@ class GroupRunFrame(BaseToolFrame):
                 self._current_account_path = output_path
         self._batch_index += 1
         self.progress_var.set(self._batch_index)
-        self.progress_text_var.set(f"{self._batch_index}/{len(self.tool_keys)}")
+        self.progress_text_color.set(COLOR_INFO_BLUE)
+        self.progress_text_var.set(f"正在处理:{self._batch_index}/{len(self.tool_keys)}")
         self.after(100, self._run_next_tool)
 
     def _step_output_path(self, key: str) -> str:
