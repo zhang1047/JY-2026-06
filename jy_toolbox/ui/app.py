@@ -23,7 +23,6 @@ from jy_toolbox.ui.tools import (
     AveragePostLengthTool,
     CustomKeywordFrequencyTool,
     DailyActiveSpanTool,
-    PostDedupTool,
     PostingPeriodTypeTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
@@ -58,24 +57,14 @@ class ToolboxApp:
         self._ensure_defaults()
         self._build_layout()
         self.refresh_tool_list()
-        self.open_tool(next(iter(self.tools)))
+        default_category = next(iter(self.config.data.get("categories", [])), None)
+        if default_category is not None:
+            self.open_group_run(default_category)
+        elif self.tools:
+            self.open_tool(next(iter(self.tools)))
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _register_tools(self) -> None:
-        self.add_tool(
-            ToolDefinition(
-                key="post_dedup",
-                name="帖子去重",
-                default_category="Excel 工具",
-                description=(
-                    "说明：根据“帖子url”列去重。若同一 URL 有重复行，会比较“点赞数”“分享数”“评论数”三列的数值总和，"
-                    "优先保留总和更大的记录；如果总和相同，则随机保留其中一条。"
-                ),
-                factory=lambda parent, app, state: PostDedupTool(
-                    parent, app, state, app.get_tool_description("post_dedup")
-                ),
-            )
-        )
         self.add_tool(
             ToolDefinition(
                 key="post_type_ratio",
@@ -317,9 +306,22 @@ class ToolboxApp:
 
     def _ensure_defaults(self) -> None:
         categories = self.config.data.setdefault("categories", [])
+        removed_categories = {"一次性处理"}
+        categories[:] = [category for category in categories if category not in removed_categories]
+
+        tool_categories = self.config.data.setdefault("tool_categories", {})
+        for key in list(tool_categories):
+            if key not in self.tools:
+                tool_categories.pop(key, None)
+
+        orders = self.config.data.setdefault("tool_orders", {})
+        for category in removed_categories:
+            orders.pop(category, None)
+        for category, order in list(orders.items()):
+            orders[category] = [key for key in order if key in self.tools]
+
         if not categories:
             categories.extend(sorted({tool.default_category for tool in self.tools.values()}))
-        tool_categories = self.config.data.setdefault("tool_categories", {})
         for key, tool in self.tools.items():
             assigned = tool_categories.get(key)
             if assigned not in categories:
