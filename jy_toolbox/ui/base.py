@@ -47,32 +47,43 @@ class BaseToolFrame(ttk.Frame):
     def open_description_editor(self) -> None:
         DescriptionEditDialog(self)
 
-    def update_description(self, description: str) -> None:
+    def description_storage(self) -> tuple[dict[str, Any], str, str] | None:
+        """Return the config section, key and default text for this frame description."""
         tool_key = self.app.current_tool_key
         if not tool_key:
+            return None
+        return (
+            self.app.config.data.setdefault("tool_descriptions", {}),
+            tool_key,
+            self.app.tools[tool_key].description,
+        )
+
+    def default_description(self) -> str:
+        storage = self.description_storage()
+        return storage[2] if storage is not None else self.description
+
+    def update_description(self, description: str) -> None:
+        storage = self.description_storage()
+        if storage is None:
             return
-        default_description = self.app.tools[tool_key].description
+        _, _, default_description = storage
         self.description = description or default_description
         self.description_var.set(self.description)
         self.save_description()
 
     def reset_description(self) -> None:
-        tool_key = self.app.current_tool_key
-        if not tool_key:
-            return
-        self.update_description(self.app.tools[tool_key].description)
+        self.update_description(self.default_description())
 
     def save_description(self) -> None:
-        tool_key = self.app.current_tool_key
-        if not tool_key:
+        storage = self.description_storage()
+        if storage is None:
             return
+        descriptions, description_key, default_description = storage
         description = self._description_value()
-        default_description = self.app.tools[tool_key].description
-        descriptions = self.app.config.data.setdefault("tool_descriptions", {})
         if description and description != default_description:
-            descriptions[tool_key] = description
+            descriptions[description_key] = description
         else:
-            descriptions.pop(tool_key, None)
+            descriptions.pop(description_key, None)
         self.description = description or default_description
         self.description_var.set(self.description)
         self.app.config.save()
