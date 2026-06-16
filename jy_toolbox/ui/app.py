@@ -944,6 +944,10 @@ class GroupRunFrame(BaseToolFrame):
             tool = self.app.tools[key]
             row = ttk.Frame(tools_body, style="Card.TFrame")
             row.pack(fill="x", pady=4)
+            # Keep per-tool dictionary sheet selectors aligned even when tool names differ in length.
+            row.columnconfigure(0, minsize=270)
+            row.columnconfigure(1, minsize=150)
+            row.columnconfigure(2, minsize=92)
             row.columnconfigure(4, weight=1)
             ttk.Label(row, text=f"{index}. {tool.name}", background=COLOR_SURFACE).grid(row=0, column=0, sticky="w", padx=(0, 8))
             if self._tool_needs_dictionary_sheet(key):
@@ -968,9 +972,6 @@ class GroupRunFrame(BaseToolFrame):
         progress_label = tk.Label(actions, textvariable=self.progress_text_var, foreground=self.progress_text_color.get(), background=COLOR_BG)
         self._bind_label_foreground(progress_label, self.progress_text_color)
         progress_label.pack(side="left")
-        status_card = ttk.Frame(self, style="Info.TFrame", padding=(12, 9))
-        status_card.pack(fill="x", padx=22, pady=8)
-        ttk.Label(status_card, textvariable=self.status_var, wraplength=820, style="Info.TLabel").pack(fill="x")
 
     def _default_output_path(self, account_path: str) -> str:
         path = Path(account_path)
@@ -1049,7 +1050,7 @@ class GroupRunFrame(BaseToolFrame):
             messagebox.showinfo = lambda *args, **kwargs: None
         self.progress_var.set(0)
         self.progress_text_color.set(COLOR_INFO_BLUE)
-        self.progress_text_var.set(f"正在处理:0/{len(self.tool_keys)}")
+        self.progress_text_var.set(f"正在处理：准备 0/{len(self.tool_keys)}")
         self.status_var.set("正在准备一键执行……")
         self._run_next_tool()
 
@@ -1057,7 +1058,7 @@ class GroupRunFrame(BaseToolFrame):
         if self._batch_index >= len(self.tool_keys):
             self.status_var.set("一键执行完成。")
             self.progress_text_color.set(COLOR_PRIMARY)
-            self.progress_text_var.set(f"处理完成:{len(self.tool_keys)}/{len(self.tool_keys)}")
+            self.progress_text_var.set(f"处理完成：{len(self.tool_keys)}/{len(self.tool_keys)}")
             self._restore_showinfo()
             self._cleanup_temp_dir()
             BatchCompleteDialog(self, Path(self.output_var.get().strip()))
@@ -1089,11 +1090,15 @@ class GroupRunFrame(BaseToolFrame):
             if hasattr(frame, "refresh_keyword_listbox"):
                 frame.refresh_keyword_listbox()
         self.status_var.set(f"正在执行：{tool.name}")
+        self.progress_text_color.set(COLOR_INFO_BLUE)
+        self.progress_text_var.set(f"正在处理：{tool.name} {self._batch_index + 1}/{len(self.tool_keys)}")
         frame.run()
         if not getattr(frame, "_background_running", False):
             self._restore_showinfo()
             self._cleanup_temp_dir()
             self.status_var.set(f"一键执行已中断：{tool.name} 未启动。")
+            self.progress_text_color.set(COLOR_DANGER)
+            self.progress_text_var.set(f"一键执行已中断：{tool.name} 未启动")
             return
         self.after(300, lambda f=frame, k=key: self._wait_tool_done(f, k))
 
@@ -1104,6 +1109,8 @@ class GroupRunFrame(BaseToolFrame):
             self._cleanup_temp_dir()
             self._batch_failed = True
             self.status_var.set("一键执行已中断，请处理失败工具后重试。")
+            self.progress_text_color.set(COLOR_DANGER)
+            self.progress_text_var.set("一键执行已中断，请处理失败工具后重试")
             original_error(exc, error_message)
         frame._finish_background_error = finish_error  # type: ignore[method-assign]
 
@@ -1125,7 +1132,7 @@ class GroupRunFrame(BaseToolFrame):
         self._batch_index += 1
         self.progress_var.set(self._batch_index)
         self.progress_text_color.set(COLOR_INFO_BLUE)
-        self.progress_text_var.set(f"正在处理:{self._batch_index}/{len(self.tool_keys)}")
+        self.progress_text_var.set(f"正在处理：{self._batch_index}/{len(self.tool_keys)}")
         self.after(100, self._run_next_tool)
 
     def _step_output_path(self, key: str) -> str:
