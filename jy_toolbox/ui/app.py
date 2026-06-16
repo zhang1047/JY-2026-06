@@ -791,8 +791,8 @@ class GroupRunFrame(BaseToolFrame):
         entry_state = "readonly" if label.startswith("最终输出 Excel") else "normal"
         ttk.Entry(parent, textvariable=var, state=entry_state).grid(row=row, column=1, sticky="ew", padx=10, pady=8)
         if label == "字典 Excel：":
-            ttk.Label(parent, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).grid(row=row, column=2, sticky="e", padx=(10, 4), pady=8)
-            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=3, sticky="w", padx=(4, 10), pady=8)
+            make_rounded_button(parent, "浏览", command, width=54).grid(row=row, column=2, sticky="w", padx=(10, 4), pady=8)
+            ttk.Label(parent, textvariable=self.dictionary_loading_var, foreground=COLOR_PRIMARY).grid(row=row, column=3, sticky="w", padx=(4, 10), pady=8)
         elif label.startswith("最终输出 Excel"):
             ttk.Label(parent, text="选择账号 Excel 后自动生成", foreground=COLOR_MUTED).grid(row=row, column=2, sticky="w", padx=10, pady=8)
         elif command is not None:
