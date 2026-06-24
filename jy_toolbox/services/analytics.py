@@ -525,18 +525,16 @@ def calculate_average_daily_original_posts_excel(
         progress(74, "正在按账号计算日均原创量……")
     average_by_homepage: dict[str, float] = {}
     original_counts_by_homepage: dict[str, int] = {}
-    span_days_by_homepage: dict[str, int] = {}
+    active_days_by_homepage: dict[str, int] = {}
     for homepage, homepage_rows in work.groupby("__homepage_key__", sort=False):
-        first_date = homepage_rows["__post_date__"].min()
-        last_date = homepage_rows["__post_date__"].max()
-        span_days = (last_date - first_date).days + 1
-        if span_days <= 0:
+        active_days = int(homepage_rows["__post_date__"].nunique())
+        if active_days <= 0:
             continue
         original_count = int(homepage_rows["__is_original__"].sum())
         homepage_key = str(homepage)
-        span_days_by_homepage[homepage_key] = span_days
+        active_days_by_homepage[homepage_key] = active_days
         original_counts_by_homepage[homepage_key] = original_count
-        average_by_homepage[homepage_key] = round(original_count / span_days, 2)
+        average_by_homepage[homepage_key] = round(original_count / active_days, 2)
 
     if progress is not None:
         progress(84, "正在写回账号表日均原创量列……")
