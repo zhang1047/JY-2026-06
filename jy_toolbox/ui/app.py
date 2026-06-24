@@ -223,9 +223,9 @@ class ToolboxApp:
                 default_category="Excel 工具",
                 description=(
                     "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
-                    "按每个账号最早到最晚的帖子发布时间计算统计时间范围天数，"
+                    "按每个账号实际有帖子的日期数量计算活跃天数，"
                     "仅排除帖子表“创作类型”为 share 的转发帖子后统计原创帖子数量，"
-                    "用原创帖子数量除以统计时间范围天数，并在账号表最后新增“日均原创量（条）”列。"
+                    "用原创帖子数量除以活跃天数，并在账号表最后新增“日均原创量（条）”列。"
                 ),
                 factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
                     parent, app, state, app.get_tool_description("average_daily_original_posts")
