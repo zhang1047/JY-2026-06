@@ -562,6 +562,82 @@ def calculate_average_daily_original_posts_excel(
     }
 
 
+
+def calculate_original_post_ratio_excel(
+    account_input_path: Path,
+    post_input_path: Path,
+    output_path: Path,
+    passwords: list[str],
+    account_sheet_name: str | int = 0,
+    post_sheet_name: str | int = 0,
+    progress: Callable[[float, str | None], None] | None = None,
+) -> dict[str, int]:
+    if not account_input_path.exists():
+        raise FileNotFoundError(f"账号文件不存在：{account_input_path}")
+    if not post_input_path.exists():
+        raise FileNotFoundError(f"帖子文件不存在：{post_input_path}")
+
+    if progress is not None:
+        progress(10, "正在后台读取账号 Excel……")
+    account_df = read_excel_with_passwords(account_input_path, passwords, account_sheet_name)
+    if progress is not None:
+        progress(30, "正在后台读取帖子 Excel……")
+    post_df = read_excel_with_passwords(post_input_path, passwords, post_sheet_name)
+
+    if "FB主页" not in account_df.columns:
+        raise ValueError("账号 Excel 缺少必要列：FB主页")
+    required_post_columns = ["主页url", "创作类型"]
+    missing_posts = [col for col in required_post_columns if col not in post_df.columns]
+    if missing_posts:
+        raise ValueError(f"帖子 Excel 缺少必要列：{', '.join(missing_posts)}")
+
+    if progress is not None:
+        progress(55, "正在按创作类型识别原创和转发帖子……")
+    work = post_df.copy()
+    work["__homepage_key__"] = work["主页url"].map(_normalized_key)
+    work["__creation_type__"] = work["创作类型"].map(
+        lambda value: str(value).strip().lower() if _is_non_empty_cell(value) else ""
+    )
+    classified_work = work[
+        (work["__homepage_key__"] != "")
+        & (work["__creation_type__"].isin(["common", "share"]))
+    ].copy()
+    classified_work["__is_original__"] = classified_work["__creation_type__"] == "common"
+
+    if progress is not None:
+        progress(72, "正在按账号汇总原创帖子占比……")
+    ratios_by_homepage: dict[str, str] = {}
+    original_posts = 0
+    for homepage, homepage_rows in classified_work.groupby("__homepage_key__", sort=False):
+        original_count = int(homepage_rows["__is_original__"].sum())
+        original_posts += original_count
+        ratios_by_homepage[str(homepage)] = _format_single_percentage(original_count, len(homepage_rows))
+
+    if progress is not None:
+        progress(84, "正在写回账号表原创帖子占比列……")
+    output_column = "原创帖子占比"
+    output_df = account_df.copy()
+    if output_column in output_df.columns:
+        output_df = output_df.drop(columns=[output_column])
+    account_keys = output_df["FB主页"].map(_normalized_key)
+    output_df[output_column] = account_keys.map(lambda key: ratios_by_homepage.get(key, ""))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if progress is not None:
+        progress(93, "正在保存处理后的账号 Excel……")
+    output_df.to_excel(output_path, index=False)
+
+    matched_accounts = int(account_keys.isin(set(classified_work["__homepage_key__"])).sum())
+    rated_accounts = int(output_df[output_column].map(_is_non_empty_cell).sum())
+    return {
+        "accounts": len(account_df),
+        "posts": len(post_df),
+        "classified_posts": len(classified_work),
+        "original_posts": original_posts,
+        "matched_accounts": matched_accounts,
+        "rated_accounts": rated_accounts,
+    }
+
 def calculate_weekly_post_frequency_excel(
     account_input_path: Path,
     post_input_path: Path,
