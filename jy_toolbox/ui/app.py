@@ -23,6 +23,7 @@ from jy_toolbox.ui.tools import (
     AveragePostLengthTool,
     CustomKeywordFrequencyTool,
     DailyActiveSpanTool,
+    OriginalPostRatioTool,
     PostingPeriodTypeTool,
     PostTypeRatioTool,
     PostThemeRatioTool,
@@ -229,6 +230,21 @@ class ToolboxApp:
                 ),
                 factory=lambda parent, app, state: AverageDailyOriginalPostsTool(
                     parent, app, state, app.get_tool_description("average_daily_original_posts")
+                ),
+            )
+        )
+        self.add_tool(
+            ToolDefinition(
+                key="original_post_ratio",
+                name="原创帖子占比",
+                default_category="Excel 工具",
+                description=(
+                    "说明：选择账号 Excel 和帖子 Excel，通过账号表“FB主页”与帖子表“主页url”关联；"
+                    "只根据帖子表“创作类型”列统计，common 视为原创，share 视为转发（非原创），"
+                    "按账号计算原创帖子占比，并在账号表最后新增“原创帖子占比”列，格式为 xx%。"
+                ),
+                factory=lambda parent, app, state: OriginalPostRatioTool(
+                    parent, app, state, app.get_tool_description("original_post_ratio")
                 ),
             )
         )
