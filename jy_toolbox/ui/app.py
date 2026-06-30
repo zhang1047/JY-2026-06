@@ -519,7 +519,18 @@ class ToolboxApp:
         order[index], order[new_index] = order[new_index], order[index]
         self.config.data.setdefault("tool_orders", {})[category] = order
         self.config.save()
+        if self._refresh_open_group_run_if_needed({category}):
+            return
         self.refresh_tool_list()
+
+    def _refresh_open_group_run_if_needed(self, changed_categories: set[str]) -> bool:
+        """Rebuild the visible one-click-run page when its tool order changes."""
+        if not isinstance(self.current_tool_frame, GroupRunFrame):
+            return False
+        if self.current_tool_frame.category not in changed_categories:
+            return False
+        self.open_group_run(self.current_tool_frame.category)
+        return True
 
     def refresh_tool_list(self) -> None:
         if self.tool_list_dialog is None or not self.tool_list_dialog.winfo_exists():
@@ -659,6 +670,8 @@ class ToolboxApp:
         orders.setdefault(category, []).append(tool_key)
         self._normalize_tool_orders()
         self.config.save()
+        if self._refresh_open_group_run_if_needed({old_category, category}):
+            return
         self.refresh_tool_list()
 
     def add_category(self) -> None:
