@@ -2076,12 +2076,14 @@ class StanceTendencyTool(BaseToolFrame):
     STANCE_COLUMN = "两岸议题立场倾向"
     OUTPUT_COLUMNS = (
         "立场倾向-分数",
-        "立场倾向-偏蓝（数量）",
-        "立场倾向-偏蓝（占比）",
-        "立场倾向-偏绿（数量）",
-        "立场倾向-偏绿（占比）",
-        "立场倾向-中立（数量）",
-        "立场倾向-中立（占比）",
+        "立场倾向-泛蓝（数量）",
+        "立场倾向-泛蓝（占比）",
+        "立场倾向-泛绿（数量）",
+        "立场倾向-泛绿（占比）",
+        "立场倾向-泛白（数量）",
+        "立场倾向-泛白（占比）",
+        "立场倾向-其他（数量）",
+        "立场倾向-其他（占比）",
     )
 
     def __init__(self, parent: tk.Widget, app: "ToolboxApp", state: dict[str, Any], description: str) -> None:
